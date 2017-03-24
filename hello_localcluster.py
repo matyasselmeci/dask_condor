@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 from __future__ import print_function
 
-import tornado
 import distributed
 import time
 
@@ -10,7 +9,7 @@ def sleepsort(arg):
     print(arg)
     return arg
 
-cluster = distributed.LocalCluster()
+cluster = distributed.LocalCluster(diagnostics_port=None)
 client = distributed.Client(cluster)
 A = client.map(ord, 'HELLO')
 B = client.map(sleepsort, A, pure=False)
