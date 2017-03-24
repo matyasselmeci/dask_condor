@@ -1,0 +1,6 @@
+#!/bin/bash
+
+rm -f worker-*.{log,err,out}
+./dask_condor/tests/test.py
+grep -i memoryusage worker-*.log
+
