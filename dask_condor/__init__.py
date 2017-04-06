@@ -51,10 +51,22 @@ def workers_constraint(jobids):
 
 
 def reserved_memory_per_worker(procs_per_worker):
-    # based on observations on Python 2.7 on 64-bit SLF 7
-    nanny_usage = 8
-    base_usage = 12
-    per_proc_usage = 8
+    # based on observations on Python 2.7 on 64-bit SLF 7 using HTCondor's
+    # report of MemoryUsage:
+
+    # nprocs  nanny?  MemoryUsage
+    # ------  ------  -----------
+    #   1      no        20
+    #   2      yes       34
+    #   3      yes       40
+    #   4      yes       47
+    #   5      yes       57
+    #   6      yes       64
+    #   7      yes       71
+    #   8      yes       80
+    base_usage = 10
+    per_proc_usage = 10
+    nanny_usage = 4
 
     reserved = (
         base_usage +
@@ -62,7 +74,7 @@ def reserved_memory_per_worker(procs_per_worker):
          if procs_per_worker > 1 else
          per_proc_usage))
 
-    return reserved
+    return int(reserved * 1.1) # add 10% slop
 
 
 def condor_rm(schedd, job_spec):
