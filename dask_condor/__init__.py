@@ -169,6 +169,13 @@ class HTCondorCluster(object):
             request_cpus += 1
         else:
             args.append('--no-nanny')
+            # can only use --name if --nprocs=1
+            worker_name = "htcondor-$(ClusterId).$(ProcId)"
+            args.append('--name=' + worker_name)
+            # when I tried +DaskWorkerName, then $(ClusterId) and $(ProcId) didn't
+            # get expanded (GT #6219)
+            job['MY.DaskWorkerName'] = '"' + worker_name + '"'
+
         args.append('--memory-limit=%de6' % memory_limit)
 
         job['Arguments'] = ' '.join(args)
