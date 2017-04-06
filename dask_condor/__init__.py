@@ -25,6 +25,10 @@ JOB_TEMPLATE = dict(
     Log="worker-$(ClusterId).$(ProcId).log",
 )
 
+JOB_STATUS_IDLE = 1
+JOB_STATUS_RUNNING = 2
+JOB_STATUS_HELD = 5
+
 _global_schedulers = [] # (scheduler_id, schedd)
 
 @atexit.register
@@ -73,7 +77,7 @@ class HTCondorCluster(object):
                  reserved_memory=None,
                  schedd_name=None,
                  threads_per_worker=1,
-                 update_interval=1000,
+                 cleanup_interval=1000,
                  worker_timeout=(24 * 60 * 60),
                  **kwargs):
 
@@ -94,13 +98,13 @@ class HTCondorCluster(object):
         _global_schedulers.append((self.scheduler.id, self.schedd))
 
         self.jobs = {}  # {jobid: CLASSAD}
-        if update_interval < 1:
-            raise ValueError("update_interval must be >= 1")
-        self._update_callback = tornado.ioloop.PeriodicCallback(
-            callback=self.update_jobs,
-            callback_time=update_interval,
+        if cleanup_interval < 1:
+            raise ValueError("cleanup_interval must be >= 1")
+        self._cleanup_callback = tornado.ioloop.PeriodicCallback(
+            callback=self.cleanup_jobs,
+            callback_time=cleanup_interval,
             io_loop=self.scheduler.loop)
-        self._update_callback.start()
+        self._cleanup_callback.start()
 
         self.memory_per_worker = memory_per_worker
         self.procs_per_worker = procs_per_worker
@@ -215,13 +219,16 @@ class HTCondorCluster(object):
 
         condor_rm(self.schedd, constraint)
 
-    def update_jobs(self):
+    def cleanup_jobs(self):
         active_jobids = \
             ['%s.%s' % (ad['ClusterId'], ad['ProcId'])
              for ad in self.schedd.query(
                 self.scheduler_constraint,
                 ['ClusterId', 'ProcId', 'JobStatus'])
-             if ad['JobStatus'] <= 2] # idle or running
+             if ad['JobStatus'] in (
+                JOB_STATUS_IDLE,
+                JOB_STATUS_RUNNING,
+                JOB_STATUS_HELD)]
         for jobid in self.jobids:
             if jobid not in active_jobids:
                 del self.jobs[jobid]
