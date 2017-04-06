@@ -29,7 +29,8 @@ class TestDaskCondor(unittest.TestCase):
         cluster = dask_condor.HTCondorCluster(memory_per_worker=256,
                                               schedd_name=socket.gethostname(),
                                               diagnostics_port=None)
-        cluster.start_workers(n=4)
+        cluster.start_workers(n=2)
+        cluster.start_workers(n=2, memory_per_worker=128)
         client = distributed.Client(cluster)
         A = client.map(ord, 'HELLO')
         B = client.map(sleepsort, A, pure=False)
