@@ -150,7 +150,8 @@ class HTCondorCluster(object):
                       procs_per_worker=None,
                       reserved_memory=None,
                       threads_per_worker=None,
-                      worker_timeout=None):
+                      worker_timeout=None,
+                      extra_attribs=None):
 
         if n < 1:
             raise ValueError("n must be >= 1")
@@ -203,6 +204,9 @@ class HTCondorCluster(object):
             worker_timeout)
         job['Periodic_Hold_Reason'] = '"dask-worker max lifetime %d min"' % (
             worker_timeout // 60)
+
+        if extra_attribs:
+            job.update(extra_attribs)
 
         with self.schedd.transaction() as txn:
             classads = []
