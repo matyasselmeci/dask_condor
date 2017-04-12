@@ -195,6 +195,8 @@ class HTCondorCluster(object):
 
         args.append('--memory-limit=%de6' % memory_limit)
 
+        args.append('--no-bokeh')
+
         job['Arguments'] = ' '.join(args)
         job['RequestMemory'] = "%d MB" % memory_per_worker
         job['RequestCpus'] = str(request_cpus)
