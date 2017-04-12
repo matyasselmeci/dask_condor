@@ -1,0 +1,5 @@
+#!/bin/bash
+dask-scheduler --no-bokeh --scheduler-file /tmp/schedfile &
+sleep 5
+dask-worker --no-nanny --no-bokeh --nprocs 1 --nthreads 1 --memory-limit=250e6 \
+            --scheduler-file /tmp/schedfile &

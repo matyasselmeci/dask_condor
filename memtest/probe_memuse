@@ -1,0 +1,12 @@
+#!/bin/sh
+temp=$(mktemp)
+ps -e -o rss,vsz,command >> $temp
+fmt="%10s  %10s  %s\n"
+printf "$fmt" $(head -n 1 $temp)
+grep [p]ython $temp | grep [d]ask | while read rsz vsz command; do
+    printf "$fmt" "$rsz" "$vsz" "$command"
+done
+rm -f $temp
+echo '-----------------------'
+"$(dirname "$0")"/probe_memuse_client.py
+
