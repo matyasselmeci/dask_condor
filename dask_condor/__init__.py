@@ -82,7 +82,7 @@ class HTCondorCluster(object):
         _global_schedulers.append((self.scheduler.id, self.schedd))
 
         self.jobs = {}  # {jobid: CLASSAD}
-        if cleanup_interval < 1:
+        if int(cleanup_interval) < 1:
             raise ValueError("cleanup_interval must be >= 1")
         self._cleanup_callback = tornado.ioloop.PeriodicCallback(
             callback=self.cleanup_jobs,
@@ -123,20 +123,20 @@ class HTCondorCluster(object):
                       worker_timeout=None,
                       extra_attribs=None):
 
-        if n < 1:
+        if int(n) < 1:
             raise ValueError("n must be >= 1")
 
         memory_per_worker = memory_per_worker or self.memory_per_worker
-        if memory_per_worker < 1:
+        if int(memory_per_worker) < 1:
             raise ValueError("memory_per_worker must be >= 1 (MB)")
         procs_per_worker = procs_per_worker or self.procs_per_worker
-        if procs_per_worker < 1:
+        if int(procs_per_worker) < 1:
             raise ValueError("procs_per_worker must be >= 1")
         threads_per_worker = threads_per_worker or self.threads_per_worker
-        if threads_per_worker < 1:
+        if int(threads_per_worker) < 1:
             raise ValueError("threads_per_worker must be >= 1")
         worker_timeout = worker_timeout or self.worker_timeout
-        if worker_timeout < 1:
+        if int(worker_timeout) < 1:
             raise ValueError("worker_timeout must be >= 1 (sec)")
 
         job = htcondor.Submit(JOB_TEMPLATE)
