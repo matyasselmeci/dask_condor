@@ -50,33 +50,6 @@ def workers_constraint(jobids):
     return or_constraints([worker_constraint(jid) for jid in jobids])
 
 
-def reserved_memory_per_worker(procs_per_worker):
-    # based on observations on Python 2.7 on 64-bit SLF 7 using HTCondor's
-    # report of MemoryUsage:
-
-    # nprocs  nanny?  MemoryUsage
-    # ------  ------  -----------
-    #   1      no        20
-    #   2      yes       34
-    #   3      yes       40
-    #   4      yes       47
-    #   5      yes       57
-    #   6      yes       64
-    #   7      yes       71
-    #   8      yes       80
-    base_usage = 10
-    per_proc_usage = 10
-    nanny_usage = 4
-
-    reserved = (
-        base_usage +
-        ((nanny_usage + per_proc_usage * procs_per_worker)
-         if procs_per_worker > 1 else
-         per_proc_usage))
-
-    return int(reserved * 1.1) # add 10% slop
-
-
 def condor_rm(schedd, job_spec):
     return schedd.act(htcondor.JobAction.Remove, job_spec)
 
@@ -86,7 +59,6 @@ class HTCondorCluster(object):
                  memory_per_worker=1024,
                  procs_per_worker=1,
                  pool=None,
-                 reserved_memory=None,
                  schedd_name=None,
                  threads_per_worker=1,
                  cleanup_interval=1000,
@@ -121,7 +93,6 @@ class HTCondorCluster(object):
         self.memory_per_worker = memory_per_worker
         self.procs_per_worker = procs_per_worker
         self.threads_per_worker = threads_per_worker
-        self.reserved_memory = reserved_memory
         self.worker_timeout = worker_timeout
 
     @tornado.gen.coroutine
@@ -148,7 +119,6 @@ class HTCondorCluster(object):
                       n=1,
                       memory_per_worker=None,
                       procs_per_worker=None,
-                      reserved_memory=None,
                       threads_per_worker=None,
                       worker_timeout=None,
                       extra_attribs=None):
@@ -165,13 +135,6 @@ class HTCondorCluster(object):
         threads_per_worker = threads_per_worker or self.threads_per_worker
         if threads_per_worker < 1:
             raise ValueError("threads_per_worker must be >= 1")
-        reserved_memory = (reserved_memory or self.reserved_memory
-                           or reserved_memory_per_worker(procs_per_worker))
-        if not (0 <= reserved_memory < memory_per_worker):
-            raise ValueError(
-                "reserved_memory (%d) must be between 0 (MB) and memory_per_worker (%d)"
-                % (reserved_memory, memory_per_worker))
-        memory_limit = memory_per_worker - reserved_memory
         worker_timeout = worker_timeout or self.worker_timeout
         if worker_timeout < 1:
             raise ValueError("worker_timeout must be >= 1 (sec)")
@@ -192,8 +155,6 @@ class HTCondorCluster(object):
             # when I tried +DaskWorkerName, then $(ClusterId) and $(ProcId) didn't
             # get expanded (GT #6219)
             job['MY.DaskWorkerName'] = '"' + worker_name + '"'
-
-        args.append('--memory-limit=%de6' % memory_limit)
 
         args.append('--no-bokeh')
 
