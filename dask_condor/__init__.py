@@ -143,6 +143,10 @@ class HTCondorCluster(object):
         args = [self.scheduler_address]
         args.append('--nprocs %d' % procs_per_worker)
         args.append('--nthreads %d' % threads_per_worker)
+        # default memory limit is 75% of memory; use 75% of RequestMemory
+        # instead
+        args.append('--memory-limit %d' %
+                    (memory_per_worker * 3 * 1048576 // 4))
         request_cpus = procs_per_worker * threads_per_worker
         if procs_per_worker > 1:
             # the nanny takes up a core too
