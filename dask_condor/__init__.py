@@ -122,21 +122,20 @@ class HTCondorCluster(object):
                       threads_per_worker=None,
                       worker_timeout=None,
                       extra_attribs=None):
-
-        if int(n) < 1:
+        n = int(n)
+        if n < 1:
             raise ValueError("n must be >= 1")
-
-        memory_per_worker = memory_per_worker or self.memory_per_worker
-        if int(memory_per_worker) < 1:
+        memory_per_worker = int(memory_per_worker or self.memory_per_worker)
+        if memory_per_worker < 1:
             raise ValueError("memory_per_worker must be >= 1 (MB)")
-        procs_per_worker = procs_per_worker or self.procs_per_worker
-        if int(procs_per_worker) < 1:
+        procs_per_worker = int(procs_per_worker or self.procs_per_worker)
+        if procs_per_worker < 1:
             raise ValueError("procs_per_worker must be >= 1")
-        threads_per_worker = threads_per_worker or self.threads_per_worker
-        if int(threads_per_worker) < 1:
+        threads_per_worker = int(threads_per_worker or self.threads_per_worker)
+        if threads_per_worker < 1:
             raise ValueError("threads_per_worker must be >= 1")
-        worker_timeout = worker_timeout or self.worker_timeout
-        if int(worker_timeout) < 1:
+        worker_timeout = int(worker_timeout or self.worker_timeout)
+        if worker_timeout < 1:
             raise ValueError("worker_timeout must be >= 1 (sec)")
 
         job = htcondor.Submit(JOB_TEMPLATE)
@@ -146,7 +145,7 @@ class HTCondorCluster(object):
         # default memory limit is 75% of memory; use 75% of RequestMemory
         # instead
         args.append('--memory-limit %d' %
-                    (memory_per_worker * 3 * 1048576 // 4))
+                    (memory_per_worker * 1048576 * 3 // 4))
         request_cpus = procs_per_worker * threads_per_worker
         if procs_per_worker > 1:
             # the nanny takes up a core too
@@ -167,9 +166,11 @@ class HTCondorCluster(object):
         job['RequestCpus'] = str(request_cpus)
         job['+DaskSchedulerId'] = '"' + self.scheduler.id + '"'
 
-        job['Periodic_Hold'] = "(time() - JobStartDate) > %d" % (
-            worker_timeout)
-        job['Periodic_Hold_Reason'] = '"dask-worker max lifetime %d min"' % (
+        job['Periodic_Hold'] = "((time() - EnteredCurrentStatus) > %d) &&" \
+                               " (JobStatus == %d)" % (worker_timeout,
+                                                       JOB_STATUS_RUNNING)
+        job['Periodic_Hold_Reason'] = \
+            '"dask-worker exceeded max lifetime of %d min"' % (
             worker_timeout // 60)
 
         if extra_attribs:
@@ -205,9 +206,9 @@ class HTCondorCluster(object):
     def cleanup_jobs(self):
         active_jobids = \
             ['%s.%s' % (ad['ClusterId'], ad['ProcId'])
-             for ad in self.schedd.query(
+             for ad in self.schedd.xquery(
                 self.scheduler_constraint,
-                ['ClusterId', 'ProcId', 'JobStatus'])
+                projection=['ClusterId', 'ProcId', 'JobStatus'])
              if ad['JobStatus'] in (
                 JOB_STATUS_IDLE,
                 JOB_STATUS_RUNNING,
