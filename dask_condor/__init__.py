@@ -3,7 +3,6 @@ Make dask workers using condor
 """
 from __future__ import division, print_function
 
-
 import atexit
 import logging
 import time
@@ -13,6 +12,9 @@ import tornado
 
 import htcondor
 import classad
+
+if not hasattr(htcondor, 'Submit'):
+    raise ImportError("htcondor.Submit not found; HTCondor 8.6.0 or newer required")
 
 
 logger = logging.getLogger(__name__)
