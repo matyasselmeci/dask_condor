@@ -178,15 +178,15 @@ class HTCondorCluster(object):
         if extra_attribs:
             job.update(extra_attribs)
 
+        classads = []
         with self.schedd.transaction() as txn:
-            classads = []
             clusterid = job.queue(txn, count=n, ad_results=classads)
-            logger.info("Started clusterid %s with %d jobs" % (clusterid, n))
-            logger.debug(
-                "RequestMemory = %s; RequestCpus = %s"
-                % (job['RequestMemory'], job['RequestCpus']))
-            for ad in classads:
-                self.jobs["%s.%s" % (ad['ClusterId'], ad['ProcId'])] = ad
+        logger.info("Started clusterid %s with %d jobs" % (clusterid, n))
+        logger.debug(
+            "RequestMemory = %s; RequestCpus = %s"
+            % (job['RequestMemory'], job['RequestCpus']))
+        for ad in classads:
+            self.jobs["%s.%s" % (ad['ClusterId'], ad['ProcId'])] = ad
 
     def killall(self):
         condor_rm(self.schedd, self.scheduler_constraint)
