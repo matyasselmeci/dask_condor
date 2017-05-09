@@ -1,0 +1,28 @@
+#!/usr/bin/condor_submit
+SOURCE_ARCHIVE = Python-2.7.13.tar.xz
+TARGET_ARCHIVE = python-with-dask-el$(EL).tar.gz
+
+universe = vanilla
+
+log = build-el$(EL).log
+output = build-el$(EL).out
+error = build-el$(EL).err
+
++IsBuildJob = true
+requirements = (Target.OpSys == "LINUX") && \
+               (Target.OpSysMajorVer == $(EL)) && \
+               (IsBuildSlot == true)
+
+# I want to transfer the build script even if I'm running in interactive mode
+transfer_input_files = $(SOURCE_ARCHIVE), requirements.txt, build.sh
+transfer_output_files = $(TARGET_ARCHIVE)
+
+executable = build.sh
+arguments = $(SOURCE_ARCHIVE) $(TARGET_ARCHIVE)
+environment = "PATH=/usr/local/bin:/usr/bin:/bin"
+
+request_cpus = 1
+request_memory = 1GB
+request_disk = 1GB
+
+queue EL in 6, 7
