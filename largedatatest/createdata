@@ -11,8 +11,8 @@ else:
     X = Y = 500
 
 f = h5py.File('/tmp/test-datafile.hdf5', 'w')
-dset = f.create_dataset("default", (X, Y), dtype='float64')
+dset = f.create_dataset("default", (X, Y), dtype='int64')
 for x in xrange(X):
     for y in xrange(Y):
-        dset[x,y] = random.random()
+        dset[x,y] = 1
 f.close()
