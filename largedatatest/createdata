@@ -2,6 +2,7 @@
 
 import sys
 import h5py
+import numpy
 import random
 
 
@@ -10,9 +11,18 @@ if len(sys.argv) > 1:
 else:
     X = Y = 500
 
+if X % 100 != 0:
+    raise ValueError("data size should be divisible by 100")
+
 f = h5py.File('/tmp/test-datafile.hdf5', 'w')
 dset = f.create_dataset("default", (X, Y), dtype='int64')
-for x in xrange(X):
-    for y in xrange(Y):
-        dset[x,y] = 1
+for x in xrange(X / 100):
+    for y in xrange(Y / 100):
+        array = numpy.ones((100, 100), dtype=numpy.int64)
+        minx = x * 100
+        miny = y * 100
+        maxx = (x+1) * 100
+        maxy = (y+1) * 100
+        dset[minx:maxx,miny:maxy] = array
+
 f.close()
