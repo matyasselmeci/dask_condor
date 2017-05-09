@@ -1,0 +1,14 @@
+#!/usr/bin/env python
+
+import dask, dask.distributed, dask.array, h5py
+import logging
+
+logging.getLogger('distributed.comm.tcp').setLevel(logging.ERROR)
+
+cli = dask.distributed.Client(scheduler_file='/tmp/schedfile')
+datafile = h5py.File('/tmp/test-datafile.hdf5', 'r')
+dataset = datafile['/default']
+x = dask.array.from_array(dataset, chunks=(100, 100))
+y = x.T * x
+
+print(cli.gather(cli.compute(y.sum())))
