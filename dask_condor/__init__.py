@@ -93,6 +93,7 @@ class HTCondorCluster(object):
                  threads_per_worker=1,
                  cleanup_interval=1000,
                  worker_timeout=(24 * 60 * 60),
+                 scheduler_port=8786,
                  **kwargs):
 
         global _global_schedulers
@@ -106,8 +107,8 @@ class HTCondorCluster(object):
                     htcondor.DaemonTypes.Schedd,
                     schedd_name))
 
-        self.local_cluster = distributed.LocalCluster(ip='', n_workers=0,
-                                                      **kwargs)
+        self.local_cluster = distributed.LocalCluster(
+            ip='', n_workers=0, scheduler_port=scheduler_port, **kwargs)
 
         _global_schedulers.append((self.scheduler.id, self.schedd))
 
