@@ -19,46 +19,46 @@ if not hasattr(htcondor, 'Submit'):
 
 logger = logging.getLogger(__name__)
 
-JOB_TEMPLATE = {
-    'Executable':           '/usr/bin/dask-worker',
-    'Universe':             'vanilla',
-    'Output':               'worker-$(ClusterId).$(ProcId).out',
-    'Error':                'worker-$(ClusterId).$(ProcId).err',
-    'Log':                  'worker-$(ClusterId).$(ProcId).log',
+JOB_TEMPLATE = \
+    { 'Executable':           '/usr/bin/dask-worker'
+    , 'Universe':             'vanilla'
+    , 'Output':               'worker-$(ClusterId).$(ProcId).out'
+    , 'Error':                'worker-$(ClusterId).$(ProcId).err'
+    , 'Log':                  'worker-$(ClusterId).$(ProcId).log'
 
     # using MY.Arguments instead of Arguments lets the value be a classad
     # expression instead of a string. Thanks TJ!
-    'MY.Arguments':         'strcat( MY.DaskSchedulerAddress'
-                            '      , " --nprocs=", MY.DaskNProcs'
-                            '      , " --nthreads=", MY.DaskNThreads'
-                            '      , " --no-bokeh"'
+    , 'MY.Arguments':         'strcat( MY.DaskSchedulerAddress'
+                              '      , " --nprocs=", MY.DaskNProcs'
+                              '      , " --nthreads=", MY.DaskNThreads'
+                              '      , " --no-bokeh"'
     # default memory limit is 75% of memory; use 75% of RequestMemory instead
-                            '      , " --memory-limit="'
-                            '      , floor(RequestMemory * 1048576 * 0.75)'
+                              '      , " --memory-limit="'
+                              '      , floor(RequestMemory * 1048576 * 0.75)'
     # no point in having a nanny if we're only running 1 proc
-                            '      , ifThenElse( (MY.DaskNProcs < 2)'
-                            '                  , " --no-nanny "'
-                            '                  , "")'
+                              '      , ifThenElse( (MY.DaskNProcs < 2)'
+                              '                  , " --no-nanny "'
+                              '                  , "")'
     # we can only have a worker name if nprocs == 1
-                            '      , ifThenElse( isUndefined(MY.DaskWorkerName)'
-                            '                  , ""'
-                            '                  , strcat(" --name=", MY.DaskWorkerName))'
-                            '      )',
+                              '      , ifThenElse( isUndefined(MY.DaskWorkerName)'
+                              '                  , ""'
+                              '                  , strcat(" --name=", MY.DaskWorkerName))'
+                              '      )'
 
-    'MY.DaskWorkerName':    'ifThenElse( (MY.DaskNProcs < 2)'
-                            '          , "htcondor-$(ClusterId).$(ProcId)"'
-                            '          , UNDEFINED)',
+    , 'MY.DaskWorkerName':    'ifThenElse( (MY.DaskNProcs < 2)'
+                              '          , "htcondor-$(ClusterId).$(ProcId)"'
+                              '          , UNDEFINED)'
 
     # reserve a CPU for the nanny process if nprocs > 1
-    'RequestCpus':          'ifThenElse( (MY.DaskNProcs < 2)'
-                            '          , MY.DaskNThreads'
-                            '          , 1 + MY.DaskNProcs * MY.DaskNThreads)',
+    , 'RequestCpus':          'ifThenElse( (MY.DaskNProcs < 2)'
+                              '          , MY.DaskNThreads'
+                              '          , 1 + MY.DaskNProcs * MY.DaskNThreads)'
 
-    'Periodic_Hold':        '((time() - EnteredCurrentStatus) > MY.DaskWorkerTimeout) &&'
-                            ' (JobStatus == 2)',
-    'Periodic_Hold_Reason': 'strcat("dask-worker exceeded max lifetime of ",'
-                            '       interval(MY.DaskWorkerTimeout))',
-}
+    , 'Periodic_Hold':        '((time() - EnteredCurrentStatus) > MY.DaskWorkerTimeout) &&'
+                              ' (JobStatus == 2)'
+    , 'Periodic_Hold_Reason': 'strcat("dask-worker exceeded max lifetime of ",'
+                              '       interval(MY.DaskWorkerTimeout))'
+    }
 
 JOB_STATUS_IDLE = 1
 JOB_STATUS_RUNNING = 2
