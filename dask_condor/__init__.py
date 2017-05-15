@@ -25,34 +25,39 @@ JOB_TEMPLATE = {
     'Output':               'worker-$(ClusterId).$(ProcId).out',
     'Error':                'worker-$(ClusterId).$(ProcId).err',
     'Log':                  'worker-$(ClusterId).$(ProcId).log',
-    'Arguments':            '"'
-                            '$(MY.DaskSchedulerAddress)'
-                            ' --nprocs=$(MY.DaskNProcs)'
-                            ' --nthreads=$(MY.DaskNThreads)'
-                            ' --no-bokeh'
-                            ' --memory-limit=$$([string($(_DaskMemoryLimit))])'
-                            ' $$([ifThenElse($(MY.DaskNProcs) < 2,'
-                            '     ""--no-nanny"",'
-                            '     """")])'
-                            ' $$([string($(_DaskWorkerNameArg))])'
-                            '"',
+
+    # using MY.Arguments instead of Arguments lets the value be a classad
+    # expression instead of a string. Thanks TJ!
+    'MY.Arguments':         'strcat( MY.DaskSchedulerAddress'
+                            '      , " --nprocs=", MY.DaskNProcs'
+                            '      , " --nthreads=", MY.DaskNThreads'
+                            '      , " --no-bokeh"'
     # default memory limit is 75% of memory; use 75% of RequestMemory instead
-    '_DaskMemoryLimit':     'floor($(RequestMemory) * 1048576 * 0.75)',
+                            '      , " --memory-limit="'
+                            '      , floor(RequestMemory * 1048576 * 0.75)'
+    # no point in having a nanny if we're only running 1 proc
+                            '      , ifThenElse( (MY.DaskNProcs < 2)'
+                            '                  , " --no-nanny "'
+                            '                  , "")'
     # we can only have a worker name if nprocs == 1
-    'MY.DaskWorkerName':    'ifThenElse(MY.DaskNProcs < 2,'
-                            '    "htcondor-$(ClusterId).$(ProcId)",'
-                            '    UNDEFINED)',
-    '_DaskWorkerNameArg':   'ifThenElse(isUndefined(MY.DaskWorkerName),'
-                            '    """",'
-                            '    strcat(""--name="", MY.DaskWorkerName))',
+                            '      , ifThenElse( isUndefined(MY.DaskWorkerName)'
+                            '                  , ""'
+                            '                  , strcat(" --name=", MY.DaskWorkerName))'
+                            '      )',
+
+    'MY.DaskWorkerName':    'ifThenElse( (MY.DaskNProcs < 2)'
+                            '          , "htcondor-$(ClusterId).$(ProcId)"'
+                            '          , UNDEFINED)',
+
     # reserve a CPU for the nanny process if nprocs > 1
-    'RequestCpus':          'ifThenElse(MY.DaskNProcs < 2,'
-                            '     MY.DaskNThreads,'
-                            '     1 + MY.DaskNProcs * MY.DaskNThreads)',
+    'RequestCpus':          'ifThenElse( (MY.DaskNProcs < 2)'
+                            '          , MY.DaskNThreads'
+                            '          , 1 + MY.DaskNProcs * MY.DaskNThreads)',
+
     'Periodic_Hold':        '((time() - EnteredCurrentStatus) > MY.DaskWorkerTimeout) &&'
                             ' (JobStatus == 2)',
-    'Periodic_Hold_Reason': '"dask-worker exceeded max lifetime of'
-                            ' $$([interval(MY.DaskWorkerTimeout)])"',
+    'Periodic_Hold_Reason': 'strcat("dask-worker exceeded max lifetime of ",'
+                            '       interval(MY.DaskWorkerTimeout))',
 }
 
 JOB_STATUS_IDLE = 1
@@ -170,7 +175,7 @@ class HTCondorCluster(object):
             raise ValueError("worker_timeout must be >= 1 (sec)")
 
         job = htcondor.Submit(JOB_TEMPLATE)
-        job['MY.DaskSchedulerAddress'] = "'" + self.scheduler_address + "'"
+        job['MY.DaskSchedulerAddress'] = '"' + self.scheduler_address + '"'
         job['MY.DaskNProcs'] = str(procs_per_worker)
         job['MY.DaskNThreads'] = str(threads_per_worker)
         job['RequestMemory'] = str(memory_per_worker)
