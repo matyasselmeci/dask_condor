@@ -185,7 +185,7 @@ class HTCondorCluster(object):
         logger.info("Started clusterid %s with %d jobs" % (clusterid, n))
         logger.debug(
             "RequestMemory = %s; RequestCpus = %s"
-            % (job['RequestMemory'], job['RequestCpus']))
+            % (classads[0].eval('RequestMemory'), classads[0].eval('RequestCpus')))
         for ad in classads:
             self.jobs["%s.%s" % (ad['ClusterId'], ad['ProcId'])] = ad
 
