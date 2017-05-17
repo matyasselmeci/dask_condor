@@ -5,7 +5,7 @@ REQUIREMENTS_FILE = requirements.txt
 
 universe = vanilla
 
-log = build-el$(EL).log
+log = build.log
 output = build-el$(EL).out
 error = build-el$(EL).err
 
