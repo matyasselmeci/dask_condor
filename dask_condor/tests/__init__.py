@@ -34,5 +34,6 @@ class HTCondorClusterTestCase(TestCase):
             logging.exception(err)
         try:
             self.client.shutdown()
+            self.cluster.close()
         except distributed.core.CommClosedError:
             pass
