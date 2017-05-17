@@ -1,0 +1,19 @@
+#!/usr/bin/env python
+import os
+import sys
+
+sys.path.insert(0, '..')
+from dask_condor import HTCondorCluster
+from distributed import Client
+
+cluster = HTCondorCluster()
+client = Client(cluster)
+future = client.map(chr, [72, 69, 76, 76, 79])
+
+print("cluster is the HTCondorCluster. client is the Client. future is the")
+print("calculation.")
+print("No workers have been started; use `cluster.submit_worker()`.")
+print("Use `client.gather(future)` to perform the calculation.")
+
+# use the debugger after running the script
+import pdb; pdb.set_trace()

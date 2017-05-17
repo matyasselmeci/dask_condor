@@ -5,6 +5,7 @@ from __future__ import division, print_function
 
 import atexit
 import logging
+import tempfile
 import time
 
 import distributed
@@ -20,7 +21,7 @@ if not hasattr(htcondor, 'Submit'):
 logger = logging.getLogger(__name__)
 
 JOB_TEMPLATE = \
-    { 'Executable':           '/usr/bin/dask-worker'
+    { #'Executable':           '/usr/bin/dask-worker'
     , 'Universe':             'vanilla'
     , 'Output':               'worker-$(ClusterId).$(ProcId).out'
     , 'Error':                'worker-$(ClusterId).$(ProcId).err'
@@ -63,6 +64,32 @@ JOB_TEMPLATE = \
 JOB_STATUS_IDLE = 1
 JOB_STATUS_RUNNING = 2
 JOB_STATUS_HELD = 5
+
+SCRIPT_TEMPLATE = """\
+#!/bin/bash
+
+if [[ -z $_CONDOR_SCRATCH_DIR ]]; then
+    echo '$_CONDOR_SCRATCH_DIR not defined -- this script needs to be run under condor'
+    exit 1
+fi
+
+export HOME=$_CONDOR_SCRATCH_DIR
+
+tar xzf ~/%(worker_tarball)s
+export PATH=~/python/bin:$PATH
+
+args=( "$@" )
+
+# This isn't actually necessary - $TMP is already under $_CONDOR_SCRATCH_DIR
+# so that's where mktemp will make its files.
+local_directory=$_CONDOR_SCRATCH_DIR/.worker
+mkdir -p "$local_directory"
+args+=(--local-directory "$local_directory")
+
+exec python ~/python/bin/dask-worker "${args[@]}"
+"""
+
+WORKER_TARBALL = "python-with-dask-el6.tar.gz"
 
 _global_schedulers = [] # (scheduler_id, schedd)
 
@@ -131,6 +158,15 @@ class HTCondorCluster(object):
         self.threads_per_worker = threads_per_worker
         self.worker_timeout = worker_timeout
 
+        self.script = tempfile.NamedTemporaryFile(
+            suffix='.sh', prefix='dask-worker-wrapper')
+        self.script.write(SCRIPT_TEMPLATE % {'worker_tarball': WORKER_TARBALL})
+        self.script.flush()
+
+        @atexit.register
+        def _erase_script():
+            self.script.close()
+
     @tornado.gen.coroutine
     def _start(self):
         pass
@@ -181,6 +217,8 @@ class HTCondorCluster(object):
         job['RequestMemory'] = str(memory_per_worker)
         job['MY.DaskSchedulerId'] = '"' + self.scheduler.id + '"'
         job['MY.DaskWorkerTimeout'] = str(worker_timeout)
+        job['Executable'] = self.script.name
+        job['Transfer_Input_Files'] = WORKER_TARBALL
 
         if extra_attribs:
             job.update(extra_attribs)
@@ -229,6 +267,7 @@ class HTCondorCluster(object):
     def close(self):
         self.killall()
         self.local_cluster.close()
+        self.script.close()
 
     def __del__(self):
         self.close()
