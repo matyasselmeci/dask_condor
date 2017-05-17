@@ -5,21 +5,29 @@
 
 set -eux
 
-export HOME=${_CONDOR_SCRATCH_DIR?'$_CONDOR_SCRATCH_DIR not defined; this script must be run under Condor'}
 
-if [[ $# -ne 2 ]]; then
-    echo "Usage: $(basename $0) <source_archive> <target_archive>"
+realpath () {
+    python -c "import os, sys; sys.stdout.write(os.path.realpath(r'''$1''') + '\n')"
+}
+
+
+work_dir=$(mktemp -dt python-with-dask-build.XXXXXX)
+trap 'rm -rf "$work_dir"' EXIT
+
+if [[ $# -ne 3 ]]; then
+    echo "Usage: $(basename $0) <source_archive> <target_archive> <requirements_file>"
     exit 2
 fi
 
-python_source_archive=~/$1
-python_target_archive=~/$2
-python_build_dir=${python_source_archive%.tar.xz}
-python_install_dir=${python_build_dir}/../python
-python_bin_dir=${python_install_dir}/bin
-requirements_file=~/requirements.txt
+python_source_archive=$(realpath "$1")
+python_target_archive=$(realpath "$2")
+requirements_file=$(realpath "$3")
+python_build_dir=$work_dir/$(basename "$python_source_archive" .tar.xz)
+python_install_dir=$work_dir/python
+python_bin_dir=$python_install_dir/bin
 
 
+# DEBUGGING
 hostname -f || :
 env | sort || :
 
@@ -39,11 +47,11 @@ if [[ ! -f $python_source_archive ]]; then
 fi
 
 
-cd
-xzcat $python_source_archive | tar x
-cd $python_build_dir
+cd "$work_dir"
+xzcat "$python_source_archive" | tar x
+cd "$python_build_dir"
 
-if ! ./configure --prefix=${python_install_dir} --with-ensurepip=install; then
+if ! ./configure --prefix="$python_install_dir" --with-ensurepip=install; then
     echo "*** configure failed. config.log follows:"
     cat config.log
     exit 1
@@ -57,7 +65,8 @@ if [[ ! -x $python_bin_dir/python ]]; then
     cp "$python_bin_dir"/python[2-9] "$python_bin_dir/python"
 fi
 
-export PATH=$python_bin_dir:$PATH
+PATH=$python_bin_dir:$PATH
+export PATH
 
 echo '*** Running Python test program'
 python - <<__end__
@@ -80,5 +89,5 @@ __end__
 which dask-worker
 
 echo '*** Tarring up results'
-cd
-tar czf "$python_target_archive" "${python_install_dir}"
+cd "$work_dir"
+tar czf "$python_target_archive" "$(basename "$python_install_dir")"
