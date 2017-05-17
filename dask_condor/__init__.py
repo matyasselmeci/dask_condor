@@ -96,7 +96,7 @@ class HTCondorCluster(object):
                  pool=None,
                  schedd_name=None,
                  threads_per_worker=1,
-                 cleanup_interval=1000,
+                 update_interval=1000,
                  worker_timeout=(24 * 60 * 60),
                  scheduler_port=8786,
                  **kwargs):
@@ -118,13 +118,13 @@ class HTCondorCluster(object):
         _global_schedulers.append((self.scheduler.id, self.schedd))
 
         self.jobs = {}  # {jobid: CLASSAD}
-        if int(cleanup_interval) < 1:
-            raise ValueError("cleanup_interval must be >= 1")
-        self._cleanup_callback = tornado.ioloop.PeriodicCallback(
-            callback=self.cleanup_jobs,
-            callback_time=cleanup_interval,
+        if int(update_interval) < 1:
+            raise ValueError("update_interval must be >= 1")
+        self._update_callback = tornado.ioloop.PeriodicCallback(
+            callback=self.update_jobs,
+            callback_time=update_interval,
             io_loop=self.scheduler.loop)
-        self._cleanup_callback.start()
+        self._update_callback.start()
 
         self.memory_per_worker = memory_per_worker
         self.procs_per_worker = procs_per_worker
@@ -212,18 +212,18 @@ class HTCondorCluster(object):
 
         condor_rm(self.schedd, constraint)
 
-    def cleanup_jobs(self):
-        active_jobids = \
-            ['%s.%s' % (ad['ClusterId'], ad['ProcId'])
-             for ad in self.schedd.xquery(
+    def update_jobs(self):
+        ads = self.schedd.xquery(
                 self.scheduler_constraint,
                 projection=['ClusterId', 'ProcId', 'JobStatus'])
-             if ad['JobStatus'] in (
-                JOB_STATUS_IDLE,
-                JOB_STATUS_RUNNING,
-                JOB_STATUS_HELD)]
-        for jobid in self.jobids:
-            if jobid not in active_jobids:
+        active_jobids = []
+        for ad in ads:
+            jobid = '{ClusterId}.{ProcId}'.format(**ad)
+            jobstatus = ad['JobStatus']
+            if jobstatus in (
+                    JOB_STATUS_IDLE, JOB_STATUS_RUNNING, JOB_STATUS_HELD):
+                self.jobs[jobid]['JobStatus'] = jobstatus
+            else:
                 del self.jobs[jobid]
 
     def close(self):
@@ -240,7 +240,19 @@ class HTCondorCluster(object):
         self.close()
 
     def __str__(self):
-        return "<%s: %d workers>" % (self.__class__.__name__, len(self.jobids))
+        total = running = idle = held = 0
+        for key in self.jobs:
+            status = self.jobs[key]['JobStatus']
+            total += 1
+            if status == JOB_STATUS_IDLE:
+                idle += 1
+            elif status == JOB_STATUS_RUNNING:
+                running += 1
+            elif status == JOB_STATUS_HELD:
+                held += 1
+
+        return "<%s: %d workers (%d running, %d idle, %d held)>" \
+               % (self.__class__.__name__, total, running, idle, held)
 
     __repr__ = __str__
 
