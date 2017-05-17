@@ -76,7 +76,7 @@ fi
 export HOME=$_CONDOR_SCRATCH_DIR
 
 tar xzf ~/%(worker_tarball)s
-export PATH=~/python/bin:$PATH
+export PATH=~/python-with-dask/bin:$PATH
 
 args=( "$@" )
 
@@ -86,7 +86,7 @@ local_directory=$_CONDOR_SCRATCH_DIR/.worker
 mkdir -p "$local_directory"
 args+=(--local-directory "$local_directory")
 
-exec python ~/python/bin/dask-worker "${args[@]}"
+exec python ~/python-with-dask/bin/dask-worker "${args[@]}"
 """
 
 WORKER_TARBALL = "python-with-dask-el6.tar.gz"

@@ -23,7 +23,7 @@ python_source_archive=$(realpath "$1")
 python_target_archive=$(realpath "$2")
 requirements_file=$(realpath "$3")
 python_build_dir=$work_dir/$(basename "$python_source_archive" .tar.xz)
-python_install_dir=$work_dir/python
+python_install_dir=$work_dir/python-with-dask
 python_bin_dir=$python_install_dir/bin
 
 
