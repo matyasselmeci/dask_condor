@@ -19,13 +19,46 @@ if not hasattr(htcondor, 'Submit'):
 
 logger = logging.getLogger(__name__)
 
-JOB_TEMPLATE = dict(
-    Executable="/usr/bin/dask-worker",
-    Universe="vanilla",
-    Output="worker-$(ClusterId).$(ProcId).out",
-    Error="worker-$(ClusterId).$(ProcId).err",
-    Log="worker-$(ClusterId).$(ProcId).log",
-)
+JOB_TEMPLATE = \
+    { 'Executable':           '/usr/bin/dask-worker'
+    , 'Universe':             'vanilla'
+    , 'Output':               'worker-$(ClusterId).$(ProcId).out'
+    , 'Error':                'worker-$(ClusterId).$(ProcId).err'
+    , 'Log':                  'worker-$(ClusterId).$(ProcId).log'
+
+    # using MY.Arguments instead of Arguments lets the value be a classad
+    # expression instead of a string. Thanks TJ!
+    , 'MY.Arguments':         'strcat( MY.DaskSchedulerAddress'
+                              '      , " --nprocs=", MY.DaskNProcs'
+                              '      , " --nthreads=", MY.DaskNThreads'
+                              '      , " --no-bokeh"'
+    # default memory limit is 75% of memory; use 75% of RequestMemory instead
+                              '      , " --memory-limit="'
+                              '      , floor(RequestMemory * 1048576 * 0.75)'
+    # no point in having a nanny if we're only running 1 proc
+                              '      , ifThenElse( (MY.DaskNProcs < 2)'
+                              '                  , " --no-nanny "'
+                              '                  , "")'
+    # we can only have a worker name if nprocs == 1
+                              '      , ifThenElse( isUndefined(MY.DaskWorkerName)'
+                              '                  , ""'
+                              '                  , strcat(" --name=", MY.DaskWorkerName))'
+                              '      )'
+
+    , 'MY.DaskWorkerName':    'ifThenElse( (MY.DaskNProcs < 2)'
+                              '          , "htcondor-$(ClusterId).$(ProcId)"'
+                              '          , UNDEFINED)'
+
+    # reserve a CPU for the nanny process if nprocs > 1
+    , 'RequestCpus':          'ifThenElse( (MY.DaskNProcs < 2)'
+                              '          , MY.DaskNThreads'
+                              '          , 1 + MY.DaskNProcs * MY.DaskNThreads)'
+
+    , 'Periodic_Hold':        '((time() - EnteredCurrentStatus) > MY.DaskWorkerTimeout) &&'
+                              ' (JobStatus == 2)'
+    , 'Periodic_Hold_Reason': 'strcat("dask-worker exceeded max lifetime of ",'
+                              '       interval(MY.DaskWorkerTimeout))'
+    }
 
 JOB_STATUS_IDLE = 1
 JOB_STATUS_RUNNING = 2
@@ -142,39 +175,12 @@ class HTCondorCluster(object):
             raise ValueError("worker_timeout must be >= 1 (sec)")
 
         job = htcondor.Submit(JOB_TEMPLATE)
-        args = [self.scheduler_address]
-        args.append('--nprocs %d' % procs_per_worker)
-        args.append('--nthreads %d' % threads_per_worker)
-        # default memory limit is 75% of memory; use 75% of RequestMemory
-        # instead
-        args.append('--memory-limit %d' %
-                    (memory_per_worker * 1048576 * 3 // 4))
-        request_cpus = procs_per_worker * threads_per_worker
-        if procs_per_worker > 1:
-            # the nanny takes up a core too
-            request_cpus += 1
-        else:
-            args.append('--no-nanny')
-            # can only use --name if --nprocs=1
-            worker_name = "htcondor-$(ClusterId).$(ProcId)"
-            args.append('--name=' + worker_name)
-            # when I tried +DaskWorkerName, then $(ClusterId) and $(ProcId) didn't
-            # get expanded (GT #6219)
-            job['MY.DaskWorkerName'] = '"' + worker_name + '"'
-
-        args.append('--no-bokeh')
-
-        job['Arguments'] = ' '.join(args)
-        job['RequestMemory'] = "%d MB" % memory_per_worker
-        job['RequestCpus'] = str(request_cpus)
-        job['+DaskSchedulerId'] = '"' + self.scheduler.id + '"'
-
-        job['Periodic_Hold'] = "((time() - EnteredCurrentStatus) > %d) &&" \
-                               " (JobStatus == %d)" % (worker_timeout,
-                                                       JOB_STATUS_RUNNING)
-        job['Periodic_Hold_Reason'] = \
-            '"dask-worker exceeded max lifetime of %d min"' % (
-            worker_timeout // 60)
+        job['MY.DaskSchedulerAddress'] = '"' + self.scheduler_address + '"'
+        job['MY.DaskNProcs'] = str(procs_per_worker)
+        job['MY.DaskNThreads'] = str(threads_per_worker)
+        job['RequestMemory'] = str(memory_per_worker)
+        job['MY.DaskSchedulerId'] = '"' + self.scheduler.id + '"'
+        job['MY.DaskWorkerTimeout'] = str(worker_timeout)
 
         if extra_attribs:
             job.update(extra_attribs)
@@ -185,7 +191,7 @@ class HTCondorCluster(object):
         logger.info("Started clusterid %s with %d jobs" % (clusterid, n))
         logger.debug(
             "RequestMemory = %s; RequestCpus = %s"
-            % (job['RequestMemory'], job['RequestCpus']))
+            % (classads[0].eval('RequestMemory'), classads[0].eval('RequestCpus')))
         for ad in classads:
             self.jobs["%s.%s" % (ad['ClusterId'], ad['ProcId'])] = ad
 
