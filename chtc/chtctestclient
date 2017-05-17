@@ -6,7 +6,7 @@ sys.path.insert(0, '..')
 from dask_condor import HTCondorCluster
 from distributed import Client
 
-cluster = HTCondorCluster()
+cluster = HTCondorCluster(worker_tarball="python-with-dask.SL6.tar.gz")
 client = Client(cluster)
 future = client.map(chr, [72, 69, 76, 76, 79])
 

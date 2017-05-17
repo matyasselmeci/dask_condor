@@ -4,7 +4,9 @@ Make dask workers using condor
 from __future__ import division, print_function
 
 import atexit
+import errno
 import logging
+import os
 import tempfile
 import time
 
@@ -89,9 +91,9 @@ args+=(--local-directory "$local_directory")
 exec python ~/python-with-dask/bin/dask-worker "${args[@]}"
 """
 
-WORKER_TARBALL = "python-with-dask-el6.tar.gz"
 
 _global_schedulers = [] # (scheduler_id, schedd)
+
 
 @atexit.register
 def global_killall():
@@ -126,6 +128,7 @@ class HTCondorCluster(object):
                  update_interval=1000,
                  worker_timeout=(24 * 60 * 60),
                  scheduler_port=8786,
+                 worker_tarball=None,
                  **kwargs):
 
         global _global_schedulers
@@ -157,15 +160,22 @@ class HTCondorCluster(object):
         self.procs_per_worker = procs_per_worker
         self.threads_per_worker = threads_per_worker
         self.worker_timeout = worker_timeout
+        self.worker_tarball = worker_tarball
 
-        self.script = tempfile.NamedTemporaryFile(
-            suffix='.sh', prefix='dask-worker-wrapper')
-        self.script.write(SCRIPT_TEMPLATE % {'worker_tarball': WORKER_TARBALL})
-        self.script.flush()
+        self.script = None
+        if self.worker_tarball:
+            if not os.path.exists(self.worker_tarball):
+                raise IOError(errno.ENOENT, "worker tarball not found",
+                              self.worker_tarball)
+            self.script = tempfile.NamedTemporaryFile(
+                suffix='.sh', prefix='dask-worker-wrapper-')
+            self.script.write(SCRIPT_TEMPLATE \
+                             % {'worker_tarball': self.worker_tarball})
+            self.script.flush()
 
-        @atexit.register
-        def _erase_script():
-            self.script.close()
+            @atexit.register
+            def _erase_script():
+                self.script.close()
 
     @tornado.gen.coroutine
     def _start(self):
@@ -217,8 +227,9 @@ class HTCondorCluster(object):
         job['RequestMemory'] = str(memory_per_worker)
         job['MY.DaskSchedulerId'] = '"' + self.scheduler.id + '"'
         job['MY.DaskWorkerTimeout'] = str(worker_timeout)
-        job['Executable'] = self.script.name
-        job['Transfer_Input_Files'] = WORKER_TARBALL
+        if self.script:
+            job['Executable'] = self.script.name
+            job['Transfer_Input_Files'] = self.worker_tarball
 
         if extra_attribs:
             job.update(extra_attribs)
@@ -267,7 +278,8 @@ class HTCondorCluster(object):
     def close(self):
         self.killall()
         self.local_cluster.close()
-        self.script.close()
+        if self.script:
+            self.script.close()
 
     def __del__(self):
         self.close()
