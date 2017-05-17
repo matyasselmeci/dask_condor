@@ -21,7 +21,7 @@ if not hasattr(htcondor, 'Submit'):
 logger = logging.getLogger(__name__)
 
 JOB_TEMPLATE = \
-    { #'Executable':           '/usr/bin/dask-worker'
+    { 'Executable':           '/usr/bin/dask-worker'
     , 'Universe':             'vanilla'
     , 'Output':               'worker-$(ClusterId).$(ProcId).out'
     , 'Error':                'worker-$(ClusterId).$(ProcId).err'
