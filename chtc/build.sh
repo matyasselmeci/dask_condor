@@ -88,6 +88,29 @@ sys.stdout.write('ok\n')
 __end__
 which dask-worker
 
+
+
+echo '*** Making package relocatable'
+# This generates a ton of output in trace mode so turn it off
+set +x
+find "$python_install_dir" -type f -print | while read filename; do
+    # -I skips 'binary' files
+    grep -qFI "$python_install_dir" "$filename" || continue
+    sed -i -e "s|$python_install_dir|XXXINSTALLDIRXXX|g" "$filename"
+done
+set -x
+
+cat - > "$python_install_dir"/fixpaths.sh <<'__end__'
+#!/bin/bash
+dir=$(dirname "$0")
+dir_abs=$(python -c "import os, sys; sys.stdout.write(os.path.realpath(r'''$dir''') + '\n')")
+find "$dir" -type f -print | while read filename; do
+    grep -qFI "XXXINSTALLDIRXXX" "$filename" || continue
+    sed -i -e "s|XXXINSTALLDIRXXX|$dir_abs|g" "$filename"
+done
+__end__
+chmod +x "$python_install_dir"/fixpaths.sh
+
 echo '*** Tarring up results'
 cd "$work_dir"
 tar czf "$python_target_archive" "$(basename "$python_install_dir")"
