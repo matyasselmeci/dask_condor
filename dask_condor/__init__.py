@@ -247,10 +247,6 @@ class HTCondorCluster(object):
         with self.schedd.transaction() as txn:
             clusterid = job.queue(txn, count=n, ad_results=classads)
         logger.info("Started clusterid %s with %d jobs" % (clusterid, n))
-        logger.debug(
-            "RequestMemory = %s; RequestCpus = %s"
-            % (classads[0].eval('RequestMemory'),
-               classads[0].eval('RequestCpus')))
         for ad in classads:
             self.jobs["%s.%s" % (ad['ClusterId'], ad['ProcId'])] = ad
 
