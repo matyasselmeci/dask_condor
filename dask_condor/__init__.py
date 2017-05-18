@@ -82,7 +82,7 @@ fi
 export HOME=$_CONDOR_SCRATCH_DIR
 
 tar xzf ~/%(worker_tarball)s
-export PATH=~/python-with-dask/bin:$PATH
+export PATH=~/dask_condor_worker/bin:$PATH
 
 args=( "$@" )
 
@@ -92,7 +92,7 @@ local_directory=$_CONDOR_SCRATCH_DIR/.worker
 mkdir -p "$local_directory"
 args+=(--local-directory "$local_directory")
 
-exec python ~/python-with-dask/bin/dask-worker "${args[@]}"
+exec python ~/dask_condor_worker/bin/dask-worker "${args[@]}"
 """
 
 
@@ -296,8 +296,8 @@ class HTCondorCluster(object):
         tar = tarfile.open(self.worker_tarball)
         try:
             members = tar.getnames()
-            for path in ['python-with-dask/bin/python',
-                         'python-with-dask/bin/dask-worker']:
+            for path in ['dask_condor_worker/bin/python',
+                         'dask_condor_worker/bin/dask-worker']:
                 if path not in members:
                     raise Error("Expected file %s not in tarball" % (path))
         finally:

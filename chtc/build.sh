@@ -11,7 +11,7 @@ realpath () {
 }
 
 
-work_dir=$(mktemp -dt python-with-dask-build.XXXXXX)
+work_dir=$(mktemp -dt dask_condor_worker.XXXXXX)
 trap 'rm -rf "$work_dir"' EXIT
 
 if [[ $# -ne 3 ]]; then
@@ -23,7 +23,7 @@ python_source_archive=$(realpath "$1")
 python_target_archive=$(realpath "$2")
 requirements_file=$(realpath "$3")
 python_build_dir=$work_dir/$(basename "$python_source_archive" .tar.xz)
-python_install_dir=$work_dir/python-with-dask
+python_install_dir=$work_dir/dask_condor_worker
 python_bin_dir=$python_install_dir/bin
 
 

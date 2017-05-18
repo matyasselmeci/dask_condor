@@ -1,6 +1,6 @@
 #!/usr/bin/condor_submit
 SOURCE_ARCHIVE = Python-2.7.13.tar.xz
-MY.TARGET_ARCHIVE = strcat("python-with-dask.", Target.OpSysAndVer, ".tar.gz")
+MY.TARGET_ARCHIVE = strcat("dask_condor_worker.", Target.OpSysAndVer, ".tar.gz")
 REQUIREMENTS_FILE = requirements.txt
 
 universe = vanilla
