@@ -246,7 +246,7 @@ class HTCondorCluster(object):
         classads = []
         with self.schedd.transaction() as txn:
             clusterid = job.queue(txn, count=n, ad_results=classads)
-        logger.info("Started clusterid %s with %d jobs" % (clusterid, n))
+        logger.info("%d job(s) submitted to cluster %s." % (n, clusterid))
         for ad in classads:
             self.jobs["%s.%s" % (ad['ClusterId'], ad['ProcId'])] = ad
 
