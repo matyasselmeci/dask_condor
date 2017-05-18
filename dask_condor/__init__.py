@@ -106,8 +106,11 @@ def global_killall():
 
 
 def worker_constraint(jobid):
-    clusterid, procid = jobid.split('.', 1)
-    return '(ClusterId == %s && ProcId == %s)' % (clusterid, procid)
+    if '.' in jobid:
+        clusterid, procid = jobid.split('.', 1)
+        return '(ClusterId == %s && ProcId == %s)' % (clusterid, procid)
+    else:
+        return '(ClusterId == %s)' % jobid
 
 
 def or_constraints(constraints):
