@@ -1,10 +1,13 @@
 #!/usr/bin/env python
+import logging
 import os
 import sys
 
 sys.path.insert(0, '..')
 from dask_condor import HTCondorCluster
 from distributed import Client
+
+logging.basicConfig(level=logging.DEBUG)
 
 cluster = HTCondorCluster(worker_tarball="dask_condor_worker.SL6.tar.gz")
 client = Client(cluster)
