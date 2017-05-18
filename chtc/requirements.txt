@@ -1,3 +1,1 @@
-dask
-distributed
-numpy
+# put extra package requirements for your user jobs here

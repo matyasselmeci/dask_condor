@@ -14,14 +14,25 @@ realpath () {
 work_dir=$(mktemp -dt dask_condor_worker.XXXXXX)
 trap 'rm -rf "$work_dir"' EXIT
 
-if [[ $# -ne 3 ]]; then
-    echo "Usage: $(basename $0) <source_archive> <target_archive> <requirements_file>"
+if [[ $# -lt 2 ]]; then
+    echo "Usage: $(basename $0) <source_archive> <target_archive> [<extra_requirements_file>]"
+    echo
+    echo "<source_archive>              The .tar.xz file containing the version of Python"
+    echo "                              to package."
+    echo "<target_archive>              The path to write the worker tarball to."
+    echo "<extra_requirements_file>     Python modules to install (in addition to"
+    echo "                              dask.distributed and dependencies)."
+    echo "                              (Optional)"
     exit 2
 fi
 
 python_source_archive=$(realpath "$1")
 python_target_archive=$(realpath "$2")
-requirements_file=$(realpath "$3")
+if [[ -n ${3-} ]]; then
+    extra_requirements_file=$(realpath "$3")
+else
+    extra_requirements_file=
+fi
 python_build_dir=$work_dir/$(basename "$python_source_archive" .tar.xz)
 python_install_dir=$work_dir/dask_condor_worker
 python_bin_dir=$python_install_dir/bin
@@ -68,7 +79,7 @@ fi
 PATH=$python_bin_dir:$PATH
 export PATH
 
-echo '*** Running Python test program'
+echo '*** Testing that Python got properly installed'
 python - <<__end__
 import sys
 from distutils import sysconfig
@@ -78,8 +89,8 @@ import ssl
 sys.stdout.write('ok\n')
 __end__
 
-echo '*** Downloading and installing dask.distributed and requirements'
-pip install -r "$requirements_file"
+echo '*** Downloading and installing dask.distributed'
+pip install dask distributed numpy
 
 echo '*** Testing that dask.distributed got properly installed'
 python - <<__end__
@@ -88,6 +99,10 @@ sys.stdout.write('ok\n')
 __end__
 which dask-worker
 
+if [[ -n $extra_requirements_file ]]; then
+    echo '*** Downloading and installing extra requirements'
+    pip install -r "$extra_requirements_file"
+fi
 
 
 echo '*** Making package relocatable'
