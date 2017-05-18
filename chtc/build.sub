@@ -24,7 +24,7 @@ environment = "PATH=/usr/local/bin:/usr/bin:/bin"
 
 request_cpus = 1
 request_memory = 256MB
-request_disk = 128MB
+request_disk = 512MB
 
 # If the build fails, condor puts the job on hold due to not being able
 # to transfer the output file. If that happens, remove the job.
