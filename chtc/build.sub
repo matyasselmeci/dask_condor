@@ -15,10 +15,10 @@ requirements = (Target.OpSys == "LINUX") && \
                (IsBuildSlot == true)
 
 # I want to transfer the build script even if I'm running in interactive mode
-transfer_input_files = $(SOURCE_ARCHIVE), $(REQUIREMENTS_FILE), build.sh
+transfer_input_files = $(SOURCE_ARCHIVE), $(REQUIREMENTS_FILE), $(executable)
 transfer_output_files = $$([string(MY.TARGET_ARCHIVE)])
 
-executable = build.sh
+executable = ../build-worker-tarball
 arguments = $(SOURCE_ARCHIVE) $$([string(MY.TARGET_ARCHIVE)]) $(REQUIREMENTS_FILE)
 environment = "PATH=/usr/local/bin:/usr/bin:/bin"
 
