@@ -267,7 +267,7 @@ class HTCondorCluster(object):
                 projection=['ClusterId', 'ProcId', 'JobStatus'])
         active_jobids = []
         for ad in ads:
-            jobid = '{ClusterId}.{ProcId}'.format(**ad)
+            jobid = '%(ClusterId)s.%(ProcId)s' % (ad)
             jobstatus = ad['JobStatus']
             if jobstatus in (
                     JOB_STATUS_IDLE, JOB_STATUS_RUNNING, JOB_STATUS_HELD):
