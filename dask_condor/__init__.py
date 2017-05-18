@@ -278,7 +278,12 @@ class HTCondorCluster(object):
             if jobstatus in (
                     JOB_STATUS_IDLE, JOB_STATUS_RUNNING, JOB_STATUS_HELD):
                 self.jobs[jobid]['JobStatus'] = jobstatus
-            else:
+                active_jobids.append(jobid)
+
+        # Evaluate the list of keys now to avoid a RuntimeError when
+        # we delete items from the dict mid-iteration
+        for jobid in list(self.jobs.keys()):
+            if jobid not in active_jobids:
                 del self.jobs[jobid]
 
     def close(self):
