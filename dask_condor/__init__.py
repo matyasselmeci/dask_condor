@@ -164,8 +164,8 @@ class HTCondorCluster(object):
             self._verify_tarball()
             self.script = tempfile.NamedTemporaryFile(
                 suffix='.sh', prefix='dask-worker-wrapper-')
-            self.script.write(SCRIPT_TEMPLATE \
-                             % {'worker_tarball': self.worker_tarball})
+            self.script.write(SCRIPT_TEMPLATE
+                % {'worker_tarball': os.path.basename(self.worker_tarball)})
             self.script.flush()
 
             @atexit.register
