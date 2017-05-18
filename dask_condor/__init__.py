@@ -17,7 +17,8 @@ import htcondor
 import classad
 
 if not hasattr(htcondor, 'Submit'):
-    raise ImportError("htcondor.Submit not found; HTCondor 8.6.0 or newer required")
+    raise ImportError("htcondor.Submit not found;"
+                      " HTCondor 8.6.0 or newer required")
 
 
 logger = logging.getLogger(__name__)
@@ -31,22 +32,23 @@ JOB_TEMPLATE = \
 
     # using MY.Arguments instead of Arguments lets the value be a classad
     # expression instead of a string. Thanks TJ!
-    , 'MY.Arguments':         'strcat( MY.DaskSchedulerAddress'
-                              '      , " --nprocs=", MY.DaskNProcs'
-                              '      , " --nthreads=", MY.DaskNThreads'
-                              '      , " --no-bokeh"'
+    , 'MY.Arguments':
+        'strcat( MY.DaskSchedulerAddress'
+        '      , " --nprocs=", MY.DaskNProcs'
+        '      , " --nthreads=", MY.DaskNThreads'
+        '      , " --no-bokeh"'
     # default memory limit is 75% of memory; use 75% of RequestMemory instead
-                              '      , " --memory-limit="'
-                              '      , floor(RequestMemory * 1048576 * 0.75)'
+        '      , " --memory-limit="'
+        '      , floor(RequestMemory * 1048576 * 0.75)'
     # no point in having a nanny if we're only running 1 proc
-                              '      , ifThenElse( (MY.DaskNProcs < 2)'
-                              '                  , " --no-nanny "'
-                              '                  , "")'
+        '      , ifThenElse( (MY.DaskNProcs < 2)'
+        '                  , " --no-nanny "'
+        '                  , "")'
     # we can only have a worker name if nprocs == 1
-                              '      , ifThenElse( isUndefined(MY.DaskWorkerName)'
-                              '                  , ""'
-                              '                  , strcat(" --name=", MY.DaskWorkerName))'
-                              '      )'
+        '      , ifThenElse( isUndefined(MY.DaskWorkerName)'
+        '                  , ""'
+        '                  , strcat(" --name=", MY.DaskWorkerName))'
+        '      )'
 
     , 'MY.DaskWorkerName':    'ifThenElse( (MY.DaskNProcs < 2)'
                               '          , "htcondor-$(ClusterId).$(ProcId)"'
@@ -57,8 +59,9 @@ JOB_TEMPLATE = \
                               '          , MY.DaskNThreads'
                               '          , 1 + MY.DaskNProcs * MY.DaskNThreads)'
 
-    , 'Periodic_Hold':        '((time() - EnteredCurrentStatus) > MY.DaskWorkerTimeout) &&'
-                              ' (JobStatus == 2)'
+    , 'Periodic_Hold':
+        '((time() - EnteredCurrentStatus) > MY.DaskWorkerTimeout) &&'
+        ' (JobStatus == 2)'
     , 'Periodic_Hold_Reason': 'strcat("dask-worker exceeded max lifetime of ",'
                               '       interval(MY.DaskWorkerTimeout))'
     }
@@ -71,7 +74,8 @@ SCRIPT_TEMPLATE = """\
 #!/bin/bash
 
 if [[ -z $_CONDOR_SCRATCH_DIR ]]; then
-    echo '$_CONDOR_SCRATCH_DIR not defined -- this script needs to be run under condor'
+    echo '$_CONDOR_SCRATCH_DIR not defined'
+    echo 'This script needs to be run as an HTCondor job'
     exit 1
 fi
 
@@ -242,7 +246,8 @@ class HTCondorCluster(object):
         logger.info("Started clusterid %s with %d jobs" % (clusterid, n))
         logger.debug(
             "RequestMemory = %s; RequestCpus = %s"
-            % (classads[0].eval('RequestMemory'), classads[0].eval('RequestCpus')))
+            % (classads[0].eval('RequestMemory'),
+               classads[0].eval('RequestCpus')))
         for ad in classads:
             self.jobs["%s.%s" % (ad['ClusterId'], ad['ProcId'])] = ad
 
