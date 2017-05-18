@@ -118,6 +118,10 @@ def condor_rm(schedd, job_spec):
     return schedd.act(htcondor.JobAction.Remove, job_spec)
 
 
+class Error(Exception):
+    pass
+
+
 class HTCondorCluster(object):
     def __init__(self,
                  memory_per_worker=1024,
@@ -164,9 +168,7 @@ class HTCondorCluster(object):
 
         self.script = None
         if self.worker_tarball:
-            if not os.path.exists(self.worker_tarball):
-                raise IOError(errno.ENOENT, "worker tarball not found",
-                              self.worker_tarball)
+            self._verify_tarball()
             self.script = tempfile.NamedTemporaryFile(
                 suffix='.sh', prefix='dask-worker-wrapper-')
             self.script.write(SCRIPT_TEMPLATE \
@@ -280,6 +282,23 @@ class HTCondorCluster(object):
         self.local_cluster.close()
         if self.script:
             self.script.close()
+
+    def _verify_tarball(self):
+        if not os.path.exists(self.worker_tarball):
+            raise IOError(errno.ENOENT, "worker tarball not found",
+                          self.worker_tarball)
+
+        import tarfile
+        tar = tarfile.open(self.worker_tarball)
+        try:
+            members = tar.getnames()
+            for path in ['python-with-dask/bin/python',
+                         'python-with-dask/bin/dask-worker']:
+                if path not in members:
+                    raise Error("Expected file %s not in tarball" % (path))
+        finally:
+            tar.close()
+
 
     def __del__(self):
         self.close()
