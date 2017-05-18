@@ -1,4 +1,4 @@
 #!/bin/bash
 
 rm -f worker-*.{log,err,out}
-./dask_condor/tests/test.py
+./tests/test.py
