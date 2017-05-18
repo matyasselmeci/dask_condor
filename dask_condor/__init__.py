@@ -142,7 +142,13 @@ class HTCondorCluster(object):
                  worker_tarball=None,
                  **kwargs):
 
-        global _global_schedulers
+        self.memory_per_worker = memory_per_worker
+        self.procs_per_worker = procs_per_worker
+        self.threads_per_worker = threads_per_worker
+        if int(update_interval) < 1:
+            raise ValueError("update_interval must be >= 1")
+        self.worker_timeout = worker_timeout
+        self.worker_tarball = worker_tarball
 
         if schedd_name is None:
             self.schedd = htcondor.Schedd()
@@ -152,26 +158,6 @@ class HTCondorCluster(object):
                 collector.locate(
                     htcondor.DaemonTypes.Schedd,
                     schedd_name))
-
-        self.local_cluster = distributed.LocalCluster(
-            ip='', n_workers=0, scheduler_port=scheduler_port, **kwargs)
-
-        _global_schedulers.append((self.scheduler.id, self.schedd))
-
-        self.jobs = {}  # {jobid: CLASSAD}
-        if int(update_interval) < 1:
-            raise ValueError("update_interval must be >= 1")
-        self._update_callback = tornado.ioloop.PeriodicCallback(
-            callback=self.update_jobs,
-            callback_time=update_interval,
-            io_loop=self.scheduler.loop)
-        self._update_callback.start()
-
-        self.memory_per_worker = memory_per_worker
-        self.procs_per_worker = procs_per_worker
-        self.threads_per_worker = threads_per_worker
-        self.worker_timeout = worker_timeout
-        self.worker_tarball = worker_tarball
 
         self.script = None
         if self.worker_tarball:
@@ -185,6 +171,20 @@ class HTCondorCluster(object):
             @atexit.register
             def _erase_script():
                 self.script.close()
+
+        self.local_cluster = distributed.LocalCluster(
+            ip='', n_workers=0, scheduler_port=scheduler_port, **kwargs)
+
+        global _global_schedulers
+        _global_schedulers.append((self.scheduler.id, self.schedd))
+
+        self.jobs = {}  # {jobid: CLASSAD}
+        self._update_callback = tornado.ioloop.PeriodicCallback(
+            callback=self.update_jobs,
+            callback_time=update_interval,
+            io_loop=self.scheduler.loop)
+        self._update_callback.start()
+
 
     @tornado.gen.coroutine
     def _start(self):
