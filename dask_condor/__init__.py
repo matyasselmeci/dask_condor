@@ -268,23 +268,30 @@ class HTCondorCluster(object):
         condor_rm(self.schedd, constraint)
 
     def update_jobs(self):
-        ads = self.schedd.xquery(
-                self.scheduler_constraint,
-                projection=['ClusterId', 'ProcId', 'JobStatus'])
-        active_jobids = []
-        for ad in ads:
-            jobid = '%(ClusterId)s.%(ProcId)s' % (ad)
-            jobstatus = ad['JobStatus']
-            if jobstatus in (
-                    JOB_STATUS_IDLE, JOB_STATUS_RUNNING, JOB_STATUS_HELD):
-                self.jobs[jobid]['JobStatus'] = jobstatus
-                active_jobids.append(jobid)
+        try:
+            ads = self.schedd.xquery(
+                    self.scheduler_constraint,
+                    projection=['ClusterId', 'ProcId', 'JobStatus'])
+            active_jobids = []
+            for ad in ads:
+                jobid = '%(ClusterId)s.%(ProcId)s' % (ad)
+                jobstatus = ad['JobStatus']
+                if jobstatus in (
+                        JOB_STATUS_IDLE, JOB_STATUS_RUNNING, JOB_STATUS_HELD):
+                    self.jobs[jobid]['JobStatus'] = jobstatus
+                    active_jobids.append(jobid)
 
-        # Evaluate the list of keys now to avoid a RuntimeError when
-        # we delete items from the dict mid-iteration
-        for jobid in list(self.jobs.keys()):
-            if jobid not in active_jobids:
-                del self.jobs[jobid]
+            # Evaluate the list of keys now to avoid a RuntimeError when
+            # we delete items from the dict mid-iteration
+            for jobid in list(self.jobs.keys()):
+                if jobid not in active_jobids:
+                    del self.jobs[jobid]
+        except RuntimeError as err:
+            # timeouts happen. Ignore them.
+            if 'Timeout when waiting for remote host' in err.message:
+                pass
+            else:
+                raise
 
     def close(self):
         self.killall()
