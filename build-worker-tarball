@@ -90,11 +90,11 @@ sys.stdout.write('ok\n')
 __end__
 
 echo '*** Downloading and installing dask.distributed'
-pip install dask distributed numpy
+pip install dask distributed numpy pandas
 
 echo '*** Testing that dask.distributed got properly installed'
 python - <<__end__
-import dask, dask.array, distributed, sys
+import dask, dask.array, dask.bag, dask.dataframe, distributed, sys
 sys.stdout.write('ok\n')
 __end__
 which dask-worker
