@@ -64,6 +64,7 @@ JOB_TEMPLATE = \
         ' (JobStatus == 2)'
     , 'Periodic_Hold_Reason': 'strcat("dask-worker exceeded max lifetime of ",'
                               '       interval(MY.DaskWorkerTimeout))'
+    , 'Transfer_Input_Files': ''
     }
 
 JOB_STATUS_IDLE = 1
@@ -84,6 +85,7 @@ export HOME=$_CONDOR_SCRATCH_DIR
 tar xzf ~/%(worker_tarball)s
 ~/dask_condor_worker/fixpaths.sh
 export PATH=~/dask_condor_worker/bin:$PATH
+export PYTHONPATH=~:${PYTHONPATH+":$PYTHONPATH"}
 
 args=( "$@" )
 
@@ -141,6 +143,7 @@ class HTCondorCluster(object):
                  worker_timeout=(24 * 60 * 60),
                  scheduler_port=8786,
                  worker_tarball=None,
+                 transfer_files=None,
                  **kwargs):
 
         self.memory_per_worker = memory_per_worker
@@ -150,6 +153,7 @@ class HTCondorCluster(object):
             raise ValueError("update_interval must be >= 1")
         self.worker_timeout = worker_timeout
         self.worker_tarball = worker_tarball
+        self.transfer_files = transfer_files
 
         if schedd_name is None:
             self.schedd = htcondor.Schedd()
@@ -213,6 +217,7 @@ class HTCondorCluster(object):
                       procs_per_worker=None,
                       threads_per_worker=None,
                       worker_timeout=None,
+                      transfer_files=None,
                       extra_attribs=None):
         n = int(n)
         if n < 1:
@@ -229,6 +234,10 @@ class HTCondorCluster(object):
         worker_timeout = int(worker_timeout or self.worker_timeout)
         if worker_timeout < 1:
             raise ValueError("worker_timeout must be >= 1 (sec)")
+        transfer_files = transfer_files = self.transfer_files
+        if transfer_files:
+            if not isinstance(transfer_files, str):
+                transfer_files = ', '.join(transfer_files)
 
         job = htcondor.Submit(JOB_TEMPLATE)
         job['MY.DaskSchedulerAddress'] = '"' + self.scheduler_address + '"'
@@ -239,7 +248,11 @@ class HTCondorCluster(object):
         job['MY.DaskWorkerTimeout'] = str(worker_timeout)
         if self.script:
             job['Executable'] = self.script.name
-            job['Transfer_Input_Files'] = self.worker_tarball
+            job['Transfer_Input_Files'] = self.worker_tarball \
+                + (', ' + transfer_files if transfer_files else '')
+        else:
+            if transfer_files:
+                job['Transfer_Input_Files'] = transfer_files
 
         if extra_attribs:
             job.update(extra_attribs)
