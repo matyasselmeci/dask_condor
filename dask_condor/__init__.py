@@ -269,30 +269,34 @@ class HTCondorCluster(object):
         condor_rm(self.schedd, constraint)
 
     def update_jobs(self):
+        # Don't want to leave the original in a half-updated state
+        new_jobs = self.jobs.copy()
         try:
             ads = self.schedd.xquery(
-                    self.scheduler_constraint,
-                    projection=['ClusterId', 'ProcId', 'JobStatus'])
+                self.scheduler_constraint,
+                projection=['ClusterId', 'ProcId', 'JobStatus',
+                            'EnteredCurrentStatus'])
             active_jobids = []
             for ad in ads:
                 jobid = '%(ClusterId)s.%(ProcId)s' % (ad)
-                jobstatus = ad['JobStatus']
-                if jobstatus in (
+                if ad['JobStatus'] in (
                         JOB_STATUS_IDLE, JOB_STATUS_RUNNING, JOB_STATUS_HELD):
-                    self.jobs[jobid]['JobStatus'] = jobstatus
+                    for attr in ['JobStatus', 'EnteredCurrentStatus']:
+                        new_jobs[jobid][attr] = ad[attr]
                     active_jobids.append(jobid)
 
             # Evaluate the list of keys now to avoid a RuntimeError when
             # we delete items from the dict mid-iteration
-            for jobid in list(self.jobs.keys()):
+            for jobid in list(new_jobs.keys()):
                 if jobid not in active_jobids:
-                    del self.jobs[jobid]
+                    del new_jobs[jobid]
         except RuntimeError as err:
             # timeouts happen. Ignore them.
             if 'Timeout when waiting for remote host' in err.message:
                 pass
             else:
                 raise
+        self.jobs = new_jobs
 
     def close(self):
         self.killall()
