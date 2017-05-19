@@ -166,7 +166,8 @@ class HTCondorCluster(object):
 
         self.script = None
         if self.worker_tarball:
-            self._verify_tarball()
+            if '://' not in self.worker_tarball:
+                self._verify_tarball()
             self.script = tempfile.NamedTemporaryFile(
                 suffix='.sh', prefix='dask-worker-wrapper-')
             self.script.write(SCRIPT_TEMPLATE
