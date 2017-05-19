@@ -1,13 +1,13 @@
 #!/usr/bin/condor_submit
 SOURCE_ARCHIVE = Python-2.7.13.tar.xz
-MY.TARGET_ARCHIVE = strcat("dask_condor_worker.", Target.OpSysAndVer, ".tar.gz")
-REQUIREMENTS_FILE = requirements.txt
+MY.TARGET_ARCHIVE = strcat("dask_condor_worker$(suffix).", Target.OpSysAndVer, ".tar.gz")
+REQUIREMENTS_FILE = requirements$(suffix).txt
 
 universe = vanilla
 
 log = build.log
-output = build-el$(EL).out
-error = build-el$(EL).err
+output = build$(suffix).el$(EL).out
+error = build$(suffix).el$(EL).err
 
 +IsBuildJob = true
 requirements = (Target.OpSys == "LINUX") && \
@@ -23,11 +23,15 @@ arguments = $(SOURCE_ARCHIVE) $$([string(MY.TARGET_ARCHIVE)]) $(REQUIREMENTS_FIL
 environment = "PATH=/usr/local/bin:/usr/bin:/bin"
 
 request_cpus = 1
-request_memory = 256MB
+request_memory = 512MB
 request_disk = 512MB
 
 # If the build fails, condor puts the job on hold due to not being able
 # to transfer the output file. If that happens, remove the job.
 periodic_remove = (JobStatus == 5) && (HoldReasonCode =?= 13)
 
-queue EL in 6, 7
+queue EL, suffix from (
+    6, _base
+    7, _base
+    6, _with_pil
+)
