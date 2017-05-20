@@ -186,6 +186,7 @@ class HTCondorCluster(object):
         _global_schedulers.append((self.scheduler.id, self.schedd))
 
         self.jobs = {}  # {jobid: CLASSAD}
+        self.ignored_jobs = set()  # set of jobids
         self._update_callback = tornado.ioloop.PeriodicCallback(
             callback=self.update_jobs,
             callback_time=update_interval,
@@ -285,13 +286,12 @@ class HTCondorCluster(object):
 
     def update_jobs(self):
         # Don't want to leave the original in a half-updated state
-        new_jobs = self.jobs.copy()
+        new_jobs = {}
         try:
             ads = self.schedd.xquery(
                 self.scheduler_constraint,
                 projection=['JobId', 'JobStatus',
                             'EnteredCurrentStatus'])
-            active_jobids = []
             for ad in ads:
                 jobid = ad['JobId']
                 if isinstance(jobid, classad.ExprTree):
@@ -301,22 +301,20 @@ class HTCondorCluster(object):
                     jobstatus = jobstatus.eval()
                 if jobstatus in (
                         JOB_STATUS_IDLE, JOB_STATUS_RUNNING, JOB_STATUS_HELD):
-                    for attr in ['JobStatus', 'EnteredCurrentStatus']:
-                        new_jobs[jobid][attr] = ad[attr]
-                    active_jobids.append(jobid)
+                    if jobid in self.jobs:
+                        new_jobs[jobid] = classad.ClassAd(dict(self.jobs[jobid]))
+                        new_jobs[jobid].update(ad)
+                    elif jobid not in self.ignored_jobs:
+                        logger.warning("Unknown job found: %s, ignoring", jobid)
+                        self.ignored_jobs.add(jobid)
 
-            # Evaluate the list of keys now to avoid a RuntimeError when
-            # we delete items from the dict mid-iteration
-            for jobid in list(new_jobs.keys()):
-                if jobid not in active_jobids:
-                    del new_jobs[jobid]
+            self.jobs = new_jobs
         except RuntimeError as err:
             # timeouts happen. Ignore them.
             if 'Timeout when waiting for remote host' in err.message:
                 pass
             else:
                 raise
-        self.jobs = new_jobs
 
     def close(self):
         self.killall()
