@@ -26,9 +26,10 @@ logger = logging.getLogger(__name__)
 JOB_TEMPLATE = \
     { 'Executable':           '/usr/bin/dask-worker'
     , 'Universe':             'vanilla'
-    , 'Output':               'worker-$(ClusterId).$(ProcId).out'
-    , 'Error':                'worker-$(ClusterId).$(ProcId).err'
-    , 'Log':                  'worker-$(ClusterId).$(ProcId).log'
+    # $F(MY.JobId) strips the quotes from MY.JobId
+    , 'Output':               'worker-$F(MY.JobId).out'
+    , 'Error':                'worker-$F(MY.JobId).err'
+    , 'Log':                  'worker-$F(MY.JobId).log'
 
     # using MY.Arguments instead of Arguments lets the value be a classad
     # expression instead of a string. Thanks TJ!
@@ -51,7 +52,7 @@ JOB_TEMPLATE = \
         '      )'
 
     , 'MY.DaskWorkerName':    'ifThenElse( (MY.DaskNProcs < 2)'
-                              '          , "htcondor-$(ClusterId).$(ProcId)"'
+                              '          , "htcondor-$F(MY.JobId)"'
                               '          , UNDEFINED)'
 
     # reserve a CPU for the nanny process if nprocs > 1
@@ -65,6 +66,7 @@ JOB_TEMPLATE = \
     , 'Periodic_Hold_Reason': 'strcat("dask-worker exceeded max lifetime of ",'
                               '       interval(MY.DaskWorkerTimeout))'
     , 'Transfer_Input_Files': ''
+    , 'MY.JobId':             '"$(ClusterId).$(ProcId)"'
     }
 
 JOB_STATUS_IDLE = 1
@@ -110,8 +112,7 @@ def global_killall():
 
 def worker_constraint(jobid):
     if '.' in jobid:
-        clusterid, procid = jobid.split('.', 1)
-        return '(ClusterId == %s && ProcId == %s)' % (clusterid, procid)
+        return '(JobId == %s)' % (jobid)
     else:
         return '(ClusterId == %s)' % jobid
 
@@ -263,7 +264,7 @@ class HTCondorCluster(object):
             clusterid = job.queue(txn, count=n, ad_results=classads)
         logger.info("%d job(s) submitted to cluster %s." % (n, clusterid))
         for ad in classads:
-            self.jobs["%s.%s" % (ad['ClusterId'], ad['ProcId'])] = ad
+            self.jobs[ad['JobId']] = ad
 
     def killall(self):
         condor_rm(self.schedd, self.scheduler_constraint)
@@ -288,12 +289,17 @@ class HTCondorCluster(object):
         try:
             ads = self.schedd.xquery(
                 self.scheduler_constraint,
-                projection=['ClusterId', 'ProcId', 'JobStatus',
+                projection=['JobId', 'JobStatus',
                             'EnteredCurrentStatus'])
             active_jobids = []
             for ad in ads:
-                jobid = '%(ClusterId)s.%(ProcId)s' % (ad)
-                if ad['JobStatus'] in (
+                jobid = ad['JobId']
+                if isinstance(jobid, classad.ExprTree):
+                    jobid = jobid.eval()
+                jobstatus = ad['JobStatus']
+                if isinstance(jobstatus, classad.ExprTree):
+                    jobstatus = jobstatus.eval()
+                if jobstatus in (
                         JOB_STATUS_IDLE, JOB_STATUS_RUNNING, JOB_STATUS_HELD):
                     for attr in ['JobStatus', 'EnteredCurrentStatus']:
                         new_jobs[jobid][attr] = ad[attr]
