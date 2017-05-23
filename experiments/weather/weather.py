@@ -12,6 +12,7 @@ logging.basicConfig(level=10)
 
 from distributed import Client
 from dask_condor import HTCondorCluster
+from distributed.deploy.adaptive import Adaptive
 
 sites = ['MSN', 'MKE', 'GRB', 'EAU', 'LSE', 'LNR', 'VOK', 'JVL', 'MTW', 'CWA', 'OSH', 'RHI', 'CMY', 'AUW']
 #sites = ['MSN']
@@ -21,7 +22,7 @@ year_end = 2016
 
 cluster = HTCondorCluster(worker_tarball='dask_condor_worker_base.SL6.tar.gz')
 client = Client(cluster)
-cluster.start_workers(n=len(sites))
+adaptive = Adaptive(cluster.scheduler, cluster, interval=20000)
 
 csvfile = "{0}-{1}-to-{2}.csv"
 ddfs = {}
