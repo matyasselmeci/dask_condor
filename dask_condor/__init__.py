@@ -35,7 +35,8 @@ JOB_TEMPLATE = \
     # expression instead of a string. Thanks TJ!
     , 'MY.Arguments':
         'strcat( MY.DaskSchedulerAddress'
-    # can't name a worker if we have more than one proc, in which case we don't need a nanny
+        # can't name a worker if we have more than one proc, in which case
+        #  we don't need a nanny
         '      , " --nprocs=1"'
         '      , " --no-nanny"'
         '      , " --nthreads=", MY.DaskNThreads'
