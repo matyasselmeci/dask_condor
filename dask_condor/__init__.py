@@ -36,12 +36,13 @@ JOB_TEMPLATE = \
     , 'MY.Arguments':
         'strcat( MY.DaskSchedulerAddress'
         # can't name a worker if we have more than one proc, in which case
-        #  we don't need a nanny
+        # we don't need a nanny
         '      , " --nprocs=1"'
         '      , " --no-nanny"'
         '      , " --nthreads=", MY.DaskNThreads'
         '      , " --no-bokeh"'
-    # default memory limit is 75% of memory; use 75% of RequestMemory instead
+        # default memory limit is 75% of memory;
+        # use 75% of RequestMemory instead
         '      , " --memory-limit="'
         '      , floor(RequestMemory * 1048576 * 0.75)'
         '      , " --name=", MY.DaskWorkerName'
@@ -93,7 +94,7 @@ exec dask-worker "${args[@]}"
 """
 
 
-_global_schedulers = [] # (scheduler_id, schedd)
+_global_schedulers = []  # (scheduler_id, schedd)
 
 
 @atexit.register
@@ -148,8 +149,8 @@ class HTCondorCluster(object):
                  **kwargs):
 
         if 'procs_per_worker' in kwargs:
-            logger.warning("Multiple processes and adaptive scaling don't mix;"
-                           "ignoring procs_per_worker")
+            logger.warning("Multiple processes and adaptive scaling"
+                           " don't mix; ignoring procs_per_worker")
         self.procs_per_worker = 1
         self.memory_per_worker = memory_per_worker
         self.disk_per_worker = disk_per_worker
@@ -251,8 +252,8 @@ class HTCondorCluster(object):
         if n < 1:
             raise ValueError("n must be >= 1")
         if procs_per_worker:
-            logger.warning("Multiple processes and adaptive scaling don't mix;"
-                           "ignoring procs_per_worker")
+            logger.warning("Multiple processes and adaptive scaling"
+                           " don't mix; ignoring procs_per_worker")
         memory_per_worker = int(memory_per_worker or self.memory_per_worker)
         if memory_per_worker < 1:
             raise ValueError("memory_per_worker must be >= 1 (MB)")
@@ -329,10 +330,12 @@ class HTCondorCluster(object):
                 if jobstatus in (
                         JOB_STATUS_IDLE, JOB_STATUS_RUNNING, JOB_STATUS_HELD):
                     if jobid in self.jobs:
-                        new_jobs[jobid] = classad.ClassAd(dict(self.jobs[jobid]))
+                        new_jobs[jobid] = classad.ClassAd(
+                            dict(self.jobs[jobid]))
                         new_jobs[jobid].update(ad)
                     elif jobid not in self.ignored_jobs:
-                        logger.warning("Unknown job found: %s, ignoring", jobid)
+                        logger.warning("Unknown job found: %s, ignoring",
+                                       jobid)
                         self.ignored_jobs.add(jobid)
 
             self.jobs = new_jobs
