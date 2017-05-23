@@ -302,6 +302,7 @@ class HTCondorCluster(object):
         if isinstance(worker_ids, str):
             worker_ids = [worker_ids]
 
+        logger.info("Removing %d job(s).", len(worker_ids))
         constraint = '%s && %s' % (
             self.scheduler_constraint,
             workers_constraint(worker_ids)
@@ -378,6 +379,7 @@ class HTCondorCluster(object):
         if n_timed_out_jobs > 0:
             n_to_release = min([n_needed, n_timed_out_jobs])
             jobids_to_release = timed_out_jobids[:n_to_release]
+            logger.info("Releasing %d held job(s).", n_to_release)
             condor_release(self.schedd, '%s && %s' % (
                 self.scheduler_constraint,
                 workers_constraint(jobids_to_release)))
@@ -430,4 +432,3 @@ class HTCondorCluster(object):
                % (self.__class__.__name__, total, running, idle, held)
 
     __repr__ = __str__
-
