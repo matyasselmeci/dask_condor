@@ -1,0 +1,13 @@
+#!/bin/bash
+. ~/usepython
+python=python
+which ipython &> /dev/null && python=ipython
+$python -i -c '
+import dask,distributed,dask_condor,logging,os
+logging.basicConfig(level=0)
+worker_tarball="dask_condor_worker_base.SL6.tar.gz"
+if not os.path.exists(worker_tarball):
+    worker_tarball = "http://research.cs.wisc.edu/~matyas/dask_condor/" + worker_tarball
+htc=dask_condor.HTCondorCluster(worker_tarball=worker_tarball)
+cli=distributed.Client(htc)
+print("htc={0}\ncli={1}".format(htc,cli))'
