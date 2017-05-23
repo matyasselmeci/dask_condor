@@ -137,6 +137,7 @@ class HTCondorCluster(object):
     def __init__(self,
                  memory_per_worker=1024,
                  procs_per_worker=1,
+                 disk_per_worker=1048576,
                  pool=None,
                  schedd_name=None,
                  threads_per_worker=1,
@@ -149,6 +150,7 @@ class HTCondorCluster(object):
 
         self.memory_per_worker = memory_per_worker
         self.procs_per_worker = procs_per_worker
+        self.disk_per_worker = disk_per_worker
         self.threads_per_worker = threads_per_worker
         if int(update_interval) < 1:
             raise ValueError("update_interval must be >= 1")
@@ -217,6 +219,7 @@ class HTCondorCluster(object):
     def start_workers(self,
                       n=1,
                       memory_per_worker=None,
+                      disk_per_worker=None,
                       procs_per_worker=None,
                       threads_per_worker=None,
                       worker_timeout=None,
@@ -231,6 +234,9 @@ class HTCondorCluster(object):
         procs_per_worker = int(procs_per_worker or self.procs_per_worker)
         if procs_per_worker < 1:
             raise ValueError("procs_per_worker must be >= 1")
+        disk_per_worker = int(disk_per_worker or self.disk_per_worker)
+        if disk_per_worker < 1:
+            raise ValueError("disk_per_worker must be >= 1 (KB)")
         threads_per_worker = int(threads_per_worker or self.threads_per_worker)
         if threads_per_worker < 1:
             raise ValueError("threads_per_worker must be >= 1")
@@ -247,6 +253,7 @@ class HTCondorCluster(object):
         job['MY.DaskNProcs'] = str(procs_per_worker)
         job['MY.DaskNThreads'] = str(threads_per_worker)
         job['RequestMemory'] = str(memory_per_worker)
+        job['RequestDisk'] = str(disk_per_worker)
         job['MY.DaskSchedulerId'] = '"' + self.scheduler.id + '"'
         job['MY.DaskWorkerTimeout'] = str(worker_timeout)
         if self.script:
