@@ -270,9 +270,6 @@ class HTCondorCluster(object):
     def killall(self):
         condor_rm(self.schedd, self.scheduler_constraint)
 
-    def submit_worker(self, **kwargs):
-        return self.start_workers(n=1, **kwargs)
-
     def stop_workers(self, worker_ids):
         if isinstance(worker_ids, str):
             worker_ids = [worker_ids]
