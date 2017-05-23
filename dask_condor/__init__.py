@@ -35,30 +35,20 @@ JOB_TEMPLATE = \
     # expression instead of a string. Thanks TJ!
     , 'MY.Arguments':
         'strcat( MY.DaskSchedulerAddress'
-        '      , " --nprocs=", MY.DaskNProcs'
+    # can't name a worker if we have more than one proc, in which case we don't need a nanny
+        '      , " --nprocs=1"'
+        '      , " --no-nanny"'
         '      , " --nthreads=", MY.DaskNThreads'
         '      , " --no-bokeh"'
     # default memory limit is 75% of memory; use 75% of RequestMemory instead
         '      , " --memory-limit="'
         '      , floor(RequestMemory * 1048576 * 0.75)'
-    # no point in having a nanny if we're only running 1 proc
-        '      , ifThenElse( (MY.DaskNProcs < 2)'
-        '                  , " --no-nanny "'
-        '                  , "")'
-    # we can only have a worker name if nprocs == 1
-        '      , ifThenElse( isUndefined(MY.DaskWorkerName)'
-        '                  , ""'
-        '                  , strcat(" --name=", MY.DaskWorkerName))'
+        '      , " --name=", MY.DaskWorkerName'
         '      )'
 
-    , 'MY.DaskWorkerName':    'ifThenElse( (MY.DaskNProcs < 2)'
-                              '          , "htcondor-$F(MY.JobId)"'
-                              '          , UNDEFINED)'
+    , 'MY.DaskWorkerName':    '"htcondor-$F(MY.JobId)"'
 
-    # reserve a CPU for the nanny process if nprocs > 1
-    , 'RequestCpus':          'ifThenElse( (MY.DaskNProcs < 2)'
-                              '          , MY.DaskNThreads'
-                              '          , 1 + MY.DaskNProcs * MY.DaskNThreads)'
+    , 'RequestCpus':          'MY.DaskNThreads'
 
     , 'Periodic_Hold':
         '((time() - EnteredCurrentStatus) > MY.DaskWorkerTimeout) &&'
@@ -136,7 +126,6 @@ class Error(Exception):
 class HTCondorCluster(object):
     def __init__(self,
                  memory_per_worker=1024,
-                 procs_per_worker=1,
                  disk_per_worker=1048576,
                  pool=None,
                  schedd_name=None,
@@ -148,8 +137,11 @@ class HTCondorCluster(object):
                  transfer_files=None,
                  **kwargs):
 
+        if 'procs_per_worker' in kwargs:
+            logger.warning("Multiple processes and adaptive scaling don't mix;"
+                           "ignoring procs_per_worker")
+        self.procs_per_worker = 1
         self.memory_per_worker = memory_per_worker
-        self.procs_per_worker = procs_per_worker
         self.disk_per_worker = disk_per_worker
         self.threads_per_worker = threads_per_worker
         if int(update_interval) < 1:
@@ -228,12 +220,12 @@ class HTCondorCluster(object):
         n = int(n)
         if n < 1:
             raise ValueError("n must be >= 1")
+        if procs_per_worker:
+            logger.warning("Multiple processes and adaptive scaling don't mix;"
+                           "ignoring procs_per_worker")
         memory_per_worker = int(memory_per_worker or self.memory_per_worker)
         if memory_per_worker < 1:
             raise ValueError("memory_per_worker must be >= 1 (MB)")
-        procs_per_worker = int(procs_per_worker or self.procs_per_worker)
-        if procs_per_worker < 1:
-            raise ValueError("procs_per_worker must be >= 1")
         disk_per_worker = int(disk_per_worker or self.disk_per_worker)
         if disk_per_worker < 1:
             raise ValueError("disk_per_worker must be >= 1 (KB)")
@@ -250,7 +242,7 @@ class HTCondorCluster(object):
 
         job = htcondor.Submit(JOB_TEMPLATE)
         job['MY.DaskSchedulerAddress'] = '"' + self.scheduler_address + '"'
-        job['MY.DaskNProcs'] = str(procs_per_worker)
+        job['MY.DaskNProcs'] = "1"
         job['MY.DaskNThreads'] = str(threads_per_worker)
         job['RequestMemory'] = str(memory_per_worker)
         job['RequestDisk'] = str(disk_per_worker)
