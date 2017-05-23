@@ -13,7 +13,7 @@ logging.basicConfig(level=10)
 
 from distributed import Client
 from dask_condor import HTCondorCluster
-from distributed.deploy.adaptive import Adaptive
+#from distributed.deploy.adaptive import Adaptive
 
 sites = ['MSN', 'MKE', 'GRB', 'EAU', 'LSE', 'LNR', 'VOK', 'JVL', 'MTW', 'CWA', 'OSH', 'RHI', 'CMY', 'AUW']
 #sites = ['MSN']
@@ -26,7 +26,10 @@ if not os.path.exists(worker_tarball):
     worker_tarball = "http://research.cs.wisc.edu/~matyas/dask_condor/" + worker_tarball
 cluster = HTCondorCluster(worker_tarball=worker_tarball)
 client = Client(cluster)
-adaptive = Adaptive(cluster.scheduler, cluster, interval=20000)
+# Don't use Adaptive. It behaves terribly for this workload: starts up
+# too few workers, and occasionally kills them for no good reason.
+#adaptive = Adaptive(cluster.scheduler, cluster, interval=20000)
+cluster.start_workers(n=len(sites))
 
 csvfile = "{0}-{1}-to-{2}.csv"
 ddfs = {}
