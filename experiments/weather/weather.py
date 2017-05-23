@@ -6,6 +6,7 @@ from __future__ import print_function
 import dask.dataframe as dd
 import pandas as pd
 import logging
+import os
 import time
 
 logging.basicConfig(level=10)
@@ -20,7 +21,10 @@ year_start = 2007
 year_end = 2016
 
 
-cluster = HTCondorCluster(worker_tarball='dask_condor_worker_base.SL6.tar.gz')
+worker_tarball="dask_condor_worker_base.SL6.tar.gz"
+if not os.path.exists(worker_tarball):
+    worker_tarball = "http://research.cs.wisc.edu/~matyas/dask_condor/" + worker_tarball
+cluster = HTCondorCluster(worker_tarball=worker_tarball)
 client = Client(cluster)
 adaptive = Adaptive(cluster.scheduler, cluster, interval=20000)
 
