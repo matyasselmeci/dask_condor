@@ -62,6 +62,7 @@ JOB_TEMPLATE = \
 JOB_STATUS_IDLE = 1
 JOB_STATUS_RUNNING = 2
 JOB_STATUS_HELD = 5
+HOLD_REASON_PERIODIC_HOLD = 2
 
 SCRIPT_TEMPLATE = """\
 #!/bin/bash
@@ -115,8 +116,16 @@ def workers_constraint(jobids):
     return or_constraints([worker_constraint(jid) for jid in jobids])
 
 
+def workers_constraint_by_name(names):
+    return or_constraints(['(DaskWorkerName =?= "%s")' % n for n in names])
+
+
 def condor_rm(schedd, job_spec):
     return schedd.act(htcondor.JobAction.Remove, job_spec)
+
+
+def condor_release(schedd, job_spec):
+    return schedd.act(htcondor.JobAction.Release, job_spec)
 
 
 class Error(Exception):
@@ -208,6 +217,26 @@ class HTCondorCluster(object):
     def scheduler_constraint(self):
         return '(DaskSchedulerId == "%s")' % self.scheduler.id
 
+    @property
+    def running_jobs(self):
+        return {k:v for k,v in self.jobs.items()
+                if v.get('JobStatus') == JOB_STATUS_RUNNING}
+
+    @property
+    def idle_jobs(self):
+        return {k:v for k,v in self.jobs.items()
+                if v.get('JobStatus') == JOB_STATUS_IDLE}
+
+    @property
+    def held_jobs(self):
+        return {k:v for k,v in self.jobs.items()
+                if v.get('JobStatus') == JOB_STATUS_HELD}
+
+    @property
+    def timed_out_jobs(self):
+        return {k:v for k,v in self.held_jobs
+                if v.get('HoldReasonCode') == HOLD_REASON_PERIODIC_HOLD}
+
     def start_workers(self,
                       n=1,
                       memory_per_worker=None,
@@ -286,8 +315,8 @@ class HTCondorCluster(object):
         try:
             ads = self.schedd.xquery(
                 self.scheduler_constraint,
-                projection=['JobId', 'JobStatus',
-                            'EnteredCurrentStatus'])
+                projection=['JobId', 'JobStatus', 'EnteredCurrentStatus',
+                            'HoldReasonCode'])
             for ad in ads:
                 jobid = ad['JobId']
                 if isinstance(jobid, classad.ExprTree):
@@ -335,6 +364,46 @@ class HTCondorCluster(object):
         finally:
             tar.close()
 
+    def scale_up(self, n):
+        n_idle_jobs = len(self.idle_jobs)
+        n_running_jobs = len(self.running_jobs)
+        timed_out_jobids = self.timed_out_jobs.keys()
+        n_timed_out_jobs = len(timed_out_jobids)
+
+        n_needed = n - n_idle_jobs - n_running_jobs
+        if n_needed < 1:
+            # we have enough workers
+            return
+
+        if n_timed_out_jobs > 0:
+            n_to_release = min([n_needed, n_timed_out_jobs])
+            jobids_to_release = timed_out_jobids[:n_to_release]
+            condor_release(self.schedd, '%s && %s' % (
+                self.scheduler_constraint,
+                workers_constraint(jobids_to_release)))
+            n_needed -= n_to_release
+
+        if n_needed < 1:
+            return
+
+        self.start_workers(n=n_needed)
+
+    def scale_down(self, workers):
+        # `workers` is worker addresses
+        worker_info = self.scheduler.worker_info
+        names = []
+        for w in workers:
+            try:
+                names.append(worker_info[w]['name'])
+            except KeyError:
+                pass
+
+        if not names:
+            return
+
+        condor_rm(self.schedd, '%s && %s' % (
+            self.scheduler_constraint,
+            workers_constraint_by_name(names)))
 
     def __del__(self):
         self.close()
