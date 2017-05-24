@@ -39,23 +39,27 @@ with open('graph.csv', 'wb') as outfile:
 
     silence_end_time = time.time() + SILENCE_TIMEOUT
     while time.time() < end_time:
-        n_processing_tasks = len(processing_task_list(cli))
-        n_cores = sum(cli.ncores().values())
-        n_futures = len(cli.who_has().keys())
+        try:
+            n_processing_tasks = len(processing_task_list(cli))
+            n_cores = sum(cli.ncores().values())
+            n_futures = len(cli.who_has().keys())
 
-        if n_cores:
-            silence_end_time = time.time() + SILENCE_TIMEOUT
-        else:
-            time.sleep(15)
-            if time.time() > silence_end_time:
-                break
+            if n_cores:
+                silence_end_time = time.time() + SILENCE_TIMEOUT
+            else:
+                time.sleep(15)
+                if time.time() > silence_end_time:
+                    break
 
-        reltime = int(time.time() - start_time)
+            reltime = int(time.time() - start_time)
 
-        row = [reltime, n_cores, n_processing_tasks, n_futures]
-        print("{0:>6.0f}s {1:>5d} cores {2:>5d} tasks {3:>5d} futures".format(*row))
-        writer.writerow(row)
+            row = [reltime, n_cores, n_processing_tasks, n_futures]
+            print("{0:>6.0f}s {1:>5d} cores {2:>5d} tasks {3:>5d} futures".format(*row))
+            writer.writerow(row)
 
-        time.sleep(5)
+            time.sleep(5)
+        except KeyboardInterrupt:
+            print("Received KeyboardInterrupt")
+            break
 
 print("Done with data collection.")
