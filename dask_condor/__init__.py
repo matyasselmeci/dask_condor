@@ -187,6 +187,9 @@ class HTCondorCluster(object):
         self.local_cluster = distributed.LocalCluster(
             ip='', n_workers=0, scheduler_port=scheduler_port, **kwargs)
 
+        # dask-scheduler cannot distinguish task failure from
+        # job removal/preemption. This might be a little extreme...
+        self.scheduler.allowed_failures = 99999
         global _global_schedulers
         _global_schedulers.append((self.scheduler.id, self.schedd))
 
