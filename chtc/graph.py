@@ -8,9 +8,8 @@ import time
 from distributed import Client
 
 
-#START_TIMEOUT = 900  # 15 min
-#SILENCE_TIMEOUT = 300  # 5 min
-START_TIMEOUT = SILENCE_TIMEOUT = 3600  # 1 hr
+START_TIMEOUT = 1800  # 30 min
+SILENCE_TIMEOUT = 900  # 15 min
 MAX_COLLECT_TIME = 86400  # 1 day
 
 
@@ -36,6 +35,8 @@ end_time = time.time() + MAX_COLLECT_TIME
 
 with open('graph.csv', 'wb') as outfile:
     writer = csv.writer(outfile)
+
+    writer.writerow(['Time', 'Cores', 'Scheduled Tasks', 'Completed Tasks'])
 
     silence_end_time = time.time() + SILENCE_TIMEOUT
     while time.time() < end_time:
