@@ -8,7 +8,9 @@ import time
 from distributed import Client
 
 
-START_TIMEOUT = 900  # 15 min
+#START_TIMEOUT = 900  # 15 min
+#SILENCE_TIMEOUT = 300  # 5 min
+START_TIMEOUT = SILENCE_TIMEOUT = 3600  # 1 hr
 MAX_COLLECT_TIME = 86400  # 1 day
 
 
@@ -35,12 +37,22 @@ end_time = time.time() + MAX_COLLECT_TIME
 with open('graph.csv', 'wb') as outfile:
     writer = csv.writer(outfile)
 
-    while cli.ncores() and time.time() < end_time:
+    silence_end_time = time.time() + SILENCE_TIMEOUT
+    while time.time() < end_time:
         n_running_tasks = len(running_task_list(cli))
         n_cores = sum(cli.ncores().values())
         n_futures = len(cli.who_has().keys())
 
-        row = [time.time() - start_time, n_cores, n_running_tasks, n_futures]
+        if n_cores:
+            silence_end_time = time.time() + SILENCE_TIMEOUT
+        else:
+            time.sleep(15)
+            if time.time() > silence_end_time:
+                break
+
+        reltime = int(time.time() - start_time)
+
+        row = [reltime, n_cores, n_running_tasks, n_futures]
         print("{0:>6.0f}s {1:>5d} cores {2:>5d} tasks {3:>5d} futures".format(*row))
         writer.writerow(row)
 
