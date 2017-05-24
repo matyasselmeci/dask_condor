@@ -121,11 +121,11 @@ def workers_constraint_by_name(names):
 
 
 def condor_rm(schedd, job_spec):
-    return schedd.act(htcondor.JobAction.Remove, job_spec)
+    return schedd.act(htcondor.JobAction.Remove, str(job_spec))
 
 
 def condor_release(schedd, job_spec):
-    return schedd.act(htcondor.JobAction.Release, job_spec)
+    return schedd.act(htcondor.JobAction.Release, str(job_spec))
 
 
 class Error(Exception):
@@ -403,7 +403,7 @@ class HTCondorCluster(object):
         names = []
         for w in workers:
             try:
-                names.append(worker_info[w]['name'])
+                names.append(str(worker_info[w]['name']))
             except KeyError:
                 pass
 
