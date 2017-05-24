@@ -236,7 +236,7 @@ class HTCondorCluster(object):
 
     @property
     def timed_out_jobs(self):
-        return {k:v for k,v in self.held_jobs
+        return {k:v for k,v in self.held_jobs.items()
                 if v.get('HoldReasonCode') == HOLD_REASON_PERIODIC_HOLD}
 
     def start_workers(self,
