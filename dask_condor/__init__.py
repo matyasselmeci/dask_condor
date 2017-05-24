@@ -21,8 +21,6 @@ if not hasattr(htcondor, 'Submit'):
                       " HTCondor 8.6.0 or newer required")
 
 
-logger = logging.getLogger(__name__)
-
 JOB_TEMPLATE = \
     { 'Executable':           '/usr/bin/dask-worker'
     , 'Universe':             'vanilla'
@@ -146,11 +144,13 @@ class HTCondorCluster(object):
                  scheduler_port=8786,
                  worker_tarball=None,
                  transfer_files=None,
+                 logger=None,
                  **kwargs):
 
+        self.logger = logger or logging.getLogger(__name__)
         if 'procs_per_worker' in kwargs:
-            logger.warning("Multiple processes and adaptive scaling"
-                           " don't mix; ignoring procs_per_worker")
+            self.logger.warning("Multiple processes and adaptive scaling"
+                                " don't mix; ignoring procs_per_worker")
         self.procs_per_worker = 1
         self.memory_per_worker = memory_per_worker
         self.disk_per_worker = disk_per_worker
@@ -255,8 +255,8 @@ class HTCondorCluster(object):
         if n < 1:
             raise ValueError("n must be >= 1")
         if procs_per_worker:
-            logger.warning("Multiple processes and adaptive scaling"
-                           " don't mix; ignoring procs_per_worker")
+            self.logger.warning("Multiple processes and adaptive scaling"
+                                " don't mix; ignoring procs_per_worker")
         memory_per_worker = int(memory_per_worker or self.memory_per_worker)
         if memory_per_worker < 1:
             raise ValueError("memory_per_worker must be >= 1 (MB)")
@@ -296,7 +296,7 @@ class HTCondorCluster(object):
         classads = []
         with self.schedd.transaction() as txn:
             clusterid = job.queue(txn, count=n, ad_results=classads)
-        logger.info("%d job(s) submitted to cluster %s." % (n, clusterid))
+        self.logger.info("%d job(s) submitted to cluster %s." % (n, clusterid))
         for ad in classads:
             self.jobs[ad['JobId']] = ad
 
@@ -307,7 +307,7 @@ class HTCondorCluster(object):
         if isinstance(worker_ids, str):
             worker_ids = [worker_ids]
 
-        logger.info("Removing %d job(s).", len(worker_ids))
+        self.logger.info("Removing %d job(s).", len(worker_ids))
         constraint = '%s && %s' % (
             self.scheduler_constraint,
             workers_constraint(worker_ids)
@@ -337,8 +337,8 @@ class HTCondorCluster(object):
                             dict(self.jobs[jobid]))
                         new_jobs[jobid].update(ad)
                     elif jobid not in self.ignored_jobs:
-                        logger.warning("Unknown job found: %s, ignoring",
-                                       jobid)
+                        self.logger.warning("Unknown job found: %s, ignoring",
+                                            jobid)
                         self.ignored_jobs.add(jobid)
 
             self.jobs = new_jobs
@@ -386,7 +386,7 @@ class HTCondorCluster(object):
         if n_timed_out_jobs > 0:
             n_to_release = min([n_needed, n_timed_out_jobs])
             jobids_to_release = timed_out_jobids[:n_to_release]
-            logger.info("Releasing %d held job(s).", n_to_release)
+            self.logger.info("Releasing %d held job(s).", n_to_release)
             condor_release(self.schedd, '%s && %s' % (
                 self.scheduler_constraint,
                 workers_constraint(jobids_to_release)))
@@ -410,7 +410,7 @@ class HTCondorCluster(object):
         if not names:
             return
 
-        logger.info("Removing %d job(s).", len(names))
+        self.logger.info("Removing %d job(s).", len(names))
         condor_rm(self.schedd, '%s && %s' % (
             self.scheduler_constraint,
             workers_constraint_by_name(names)))
