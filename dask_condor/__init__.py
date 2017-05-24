@@ -407,6 +407,7 @@ class HTCondorCluster(object):
         if not names:
             return
 
+        logger.info("Removing %d job(s).", len(names))
         condor_rm(self.schedd, '%s && %s' % (
             self.scheduler_constraint,
             workers_constraint_by_name(names)))
