@@ -91,7 +91,10 @@ args=( "$@" )
 local_directory=$_CONDOR_SCRATCH_DIR/.worker
 mkdir -p "$local_directory"
 args+=(--local-directory "$local_directory")
-
+if [[ -n "%(pre_script)s" ]]; then
+    chmod +x "%(pre_script)s"
+    "%(pre_script)s"
+fi
 exec dask-worker "${args[@]}"
 """
 
@@ -147,6 +150,7 @@ class HTCondorCluster(object):
                  worker_timeout=(24 * 60 * 60),
                  scheduler_port=8786,
                  worker_tarball=None,
+                 pre_script=None,
                  transfer_files=None,
                  logdir='.',
                  logger=None,
@@ -164,6 +168,7 @@ class HTCondorCluster(object):
             raise ValueError("update_interval must be >= 1")
         self.worker_timeout = worker_timeout
         self.worker_tarball = worker_tarball
+        self.pre_script = pre_script
         self.transfer_files = transfer_files
 
         if schedd_name is None:
@@ -179,10 +184,14 @@ class HTCondorCluster(object):
         if self.worker_tarball:
             if '://' not in self.worker_tarball:
                 self._verify_tarball()
+            pre_script_in_wrapper = ""
+            if self.pre_script:
+                pre_script_in_wrapper = "./" + os.path.basename(self.pre_script)
             self.script = tempfile.NamedTemporaryFile(
                 suffix='.sh', prefix='dask-worker-wrapper-')
             self.script.write(SCRIPT_TEMPLATE
-                % {'worker_tarball': os.path.basename(self.worker_tarball)})
+                % {'worker_tarball': os.path.basename(self.worker_tarball),
+                   'pre_script': pre_script_in_wrapper})
             self.script.flush()
 
             @atexit.register
@@ -301,7 +310,8 @@ class HTCondorCluster(object):
         if self.script:
             job['Executable'] = self.script.name
             job['Transfer_Input_Files'] = self.worker_tarball \
-                + (', ' + transfer_files if transfer_files else '')
+                + ((', ' + transfer_files) if transfer_files else '') \
+                + ((', ' + self.pre_script) if self.pre_script else '')
         else:
             if transfer_files:
                 job['Transfer_Input_Files'] = transfer_files
