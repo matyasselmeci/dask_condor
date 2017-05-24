@@ -25,9 +25,9 @@ JOB_TEMPLATE = \
     { 'Executable':           '/usr/bin/dask-worker'
     , 'Universe':             'vanilla'
     # $F(MY.JobId) strips the quotes from MY.JobId
-    , 'Output':               'worker-$F(MY.JobId).out'
-    , 'Error':                'worker-$F(MY.JobId).err'
-    , 'Log':                  'worker-$F(MY.JobId).log'
+    , 'Output':               '$(LogDir)/worker-$F(MY.JobId).out'
+    , 'Error':                '$(LogDir)/worker-$F(MY.JobId).err'
+    , 'Log':                  '$(LogDir)/worker-$F(MY.JobId).log'
 
     # using MY.Arguments instead of Arguments lets the value be a classad
     # expression instead of a string. Thanks TJ!
@@ -144,6 +144,7 @@ class HTCondorCluster(object):
                  scheduler_port=8786,
                  worker_tarball=None,
                  transfer_files=None,
+                 logdir='.',
                  logger=None,
                  **kwargs):
 
@@ -184,12 +185,22 @@ class HTCondorCluster(object):
             def _erase_script():
                 self.script.close()
 
+        self.logdir = logdir
+        try:
+            os.makedirs(self.logdir)
+        except OSError as err:
+            if err.errno == errno.EEXIST:
+                pass
+            else:
+                self.logger.warning("Couldn't make log dir: %s", err)
+
         self.local_cluster = distributed.LocalCluster(
             ip='', n_workers=0, scheduler_port=scheduler_port, **kwargs)
 
         # dask-scheduler cannot distinguish task failure from
         # job removal/preemption. This might be a little extreme...
         self.scheduler.allowed_failures = 99999
+
         global _global_schedulers
         _global_schedulers.append((self.scheduler.id, self.schedd))
 
@@ -282,6 +293,7 @@ class HTCondorCluster(object):
         job['RequestDisk'] = str(disk_per_worker)
         job['MY.DaskSchedulerId'] = '"' + self.scheduler.id + '"'
         job['MY.DaskWorkerTimeout'] = str(worker_timeout)
+        job['LogDir'] = self.logdir
         if self.script:
             job['Executable'] = self.script.name
             job['Transfer_Input_Files'] = self.worker_tarball \
