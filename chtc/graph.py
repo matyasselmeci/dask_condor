@@ -14,7 +14,7 @@ START_TIMEOUT = SILENCE_TIMEOUT = 3600  # 1 hr
 MAX_COLLECT_TIME = 86400  # 1 day
 
 
-def running_task_list(cli):
+def processing_task_list(cli):
     return list(itertools.chain.from_iterable(cli.processing().values()))
 
 
@@ -39,7 +39,7 @@ with open('graph.csv', 'wb') as outfile:
 
     silence_end_time = time.time() + SILENCE_TIMEOUT
     while time.time() < end_time:
-        n_running_tasks = len(running_task_list(cli))
+        n_processing_tasks = len(processing_task_list(cli))
         n_cores = sum(cli.ncores().values())
         n_futures = len(cli.who_has().keys())
 
@@ -52,7 +52,7 @@ with open('graph.csv', 'wb') as outfile:
 
         reltime = int(time.time() - start_time)
 
-        row = [reltime, n_cores, n_running_tasks, n_futures]
+        row = [reltime, n_cores, n_processing_tasks, n_futures]
         print("{0:>6.0f}s {1:>5d} cores {2:>5d} tasks {3:>5d} futures".format(*row))
         writer.writerow(row)
 
