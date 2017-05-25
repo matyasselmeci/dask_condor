@@ -79,10 +79,12 @@ fi
 
 export HOME=$_CONDOR_SCRATCH_DIR
 
-tar xzf ~/%(worker_tarball)s
-~/dask_condor_worker/fixpaths.sh
-export PATH=~/dask_condor_worker/bin:$PATH
-export PYTHONPATH=~:${PYTHONPATH+":$PYTHONPATH"}
+if [[ -n "%(worker_tarball)s" ]]; then
+    tar xzf ~/"%(worker_tarball)s"
+    ~/dask_condor_worker/fixpaths.sh
+    export PATH=~/dask_condor_worker/bin:$PATH
+    export PYTHONPATH=~:${PYTHONPATH+":$PYTHONPATH"}
+fi
 
 args=( "$@" )
 
@@ -180,23 +182,24 @@ class HTCondorCluster(object):
                     htcondor.DaemonTypes.Schedd,
                     schedd_name))
 
-        self.script = None
+        self.script = tempfile.NamedTemporaryFile(
+            suffix='.sh', prefix='dask-worker-wrapper-')
+        worker_tarball_in_wrapper = ""
+        pre_script_in_wrapper = ""
         if self.worker_tarball:
             if '://' not in self.worker_tarball:
                 self._verify_tarball()
-            pre_script_in_wrapper = ""
-            if self.pre_script:
-                pre_script_in_wrapper = "./" + os.path.basename(self.pre_script)
-            self.script = tempfile.NamedTemporaryFile(
-                suffix='.sh', prefix='dask-worker-wrapper-')
-            self.script.write(SCRIPT_TEMPLATE
-                % {'worker_tarball': os.path.basename(self.worker_tarball),
-                   'pre_script': pre_script_in_wrapper})
-            self.script.flush()
+            worker_tarball_in_wrapper = os.path.basename(self.worker_tarball)
+        if self.pre_script:
+            pre_script_in_wrapper = "./" + os.path.basename(self.pre_script)
+        self.script.write(SCRIPT_TEMPLATE
+            % {'worker_tarball': worker_tarball_in_wrapper,
+               'pre_script': pre_script_in_wrapper})
+        self.script.flush()
 
-            @atexit.register
-            def _erase_script():
-                self.script.close()
+        @atexit.register
+        def _erase_script():
+            self.script.close()
 
         self.logdir = logdir
         try:
@@ -293,10 +296,9 @@ class HTCondorCluster(object):
         worker_timeout = int(worker_timeout or self.worker_timeout)
         if worker_timeout < 1:
             raise ValueError("worker_timeout must be >= 1 (sec)")
-        transfer_files = transfer_files or self.transfer_files
-        if transfer_files:
-            if not isinstance(transfer_files, str):
-                transfer_files = ', '.join(transfer_files)
+        transfer_files = transfer_files or self.transfer_files or []
+        if isinstance(transfer_files, str):
+            transfer_files = [x.strip() for x in transfer_files.split(',')]
 
         job = htcondor.Submit(JOB_TEMPLATE)
         job['MY.DaskSchedulerAddress'] = '"' + self.scheduler_address + '"'
@@ -307,14 +309,12 @@ class HTCondorCluster(object):
         job['MY.DaskSchedulerId'] = '"' + self.scheduler.id + '"'
         job['MY.DaskWorkerTimeout'] = str(worker_timeout)
         job['LogDir'] = self.logdir
-        if self.script:
-            job['Executable'] = self.script.name
-            job['Transfer_Input_Files'] = self.worker_tarball \
-                + ((', ' + transfer_files) if transfer_files else '') \
-                + ((', ' + self.pre_script) if self.pre_script else '')
-        else:
-            if transfer_files:
-                job['Transfer_Input_Files'] = transfer_files
+        job['Executable'] = self.script.name
+        if self.worker_tarball:
+            transfer_files.append(self.worker_tarball)
+        if self.pre_script:
+            transfer_files.append(self.pre_script)
+        job['Transfer_Input_Files'] = ', '.join(transfer_files)
 
         if extra_attribs:
             job.update(extra_attribs)
