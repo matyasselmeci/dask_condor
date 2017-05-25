@@ -26,12 +26,13 @@ JOB_TEMPLATE = \
     , 'Universe':             'vanilla'
     # $F(MY.JobId) strips the quotes from MY.JobId
     , 'Output':               '$(LogDir)/worker-$F(MY.JobId).out'
-    , 'Error':                '$(LogDir)/worker-$F(MY.JobId).err'
-    , 'Log':                  '$(LogDir)/worker-$F(MY.JobId).log'
+    ## Don't transfer stderr -- we're redirecting it to stdout
+    #, 'Error':                '$(LogDir)/worker-$F(MY.JobId).err'
+    , 'Log':                  '$(LogDir)/worker-$(ClusterId).log'
     # We kill all the workers to stop them so we need to stream their
-    # stderr and stdout if we ever want to see anything
+    # stdout if we ever want to see anything
     , 'Stream_Output':        'True'
-    , 'Stream_Error':         'True'
+    #, 'Stream_Error':         'True'
 
     # using MY.Arguments instead of Arguments lets the value be a classad
     # expression instead of a string. Thanks TJ!
@@ -70,6 +71,8 @@ HOLD_REASON_PERIODIC_HOLD = 2
 
 SCRIPT_TEMPLATE = """\
 #!/bin/bash
+
+exec -- 2>&1
 
 if [[ -z $_CONDOR_SCRATCH_DIR ]]; then
     echo '$_CONDOR_SCRATCH_DIR not defined'
