@@ -28,6 +28,10 @@ JOB_TEMPLATE = \
     , 'Output':               '$(LogDir)/worker-$F(MY.JobId).out'
     , 'Error':                '$(LogDir)/worker-$F(MY.JobId).err'
     , 'Log':                  '$(LogDir)/worker-$F(MY.JobId).log'
+    # We kill all the workers to stop them so we need to stream their
+    # stderr and stdout if we ever want to see anything
+    , 'Stream_Output':        'True'
+    , 'Stream_Error':         'True'
 
     # using MY.Arguments instead of Arguments lets the value be a classad
     # expression instead of a string. Thanks TJ!
