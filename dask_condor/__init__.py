@@ -187,6 +187,7 @@ class HTCondorCluster(object):
 
         self.script = tempfile.NamedTemporaryFile(
             suffix='.sh', prefix='dask-worker-wrapper-')
+        os.chmod(self.script.name, 0o755)
         worker_tarball_in_wrapper = ""
         pre_script_in_wrapper = ""
         if self.worker_tarball:
