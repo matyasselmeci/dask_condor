@@ -1,0 +1,35 @@
+#!/usr/bin/condor_submit
+SOURCE_ARCHIVE = Python-2.7.13.tar.xz
+MY.TARGET_ARCHIVE = strcat("dask_condor_worker$(suffix).", Target.OpSysAndVer, ".tar.gz")
+REQUIREMENTS_FILE = requirements$(suffix).txt
+
+universe = vanilla
+
+log = build.log
+output = build$(suffix).el$(EL).out
+error = build$(suffix).el$(EL).err
+
++IsBuildJob = true
+requirements = (Target.OpSys == "LINUX") && \
+               (Target.OpSysMajorVer == $(EL)) && \
+               (IsBuildSlot == true)
+
+# I want to transfer the build script even if I'm running in interactive mode
+transfer_input_files = $(SOURCE_ARCHIVE), $(REQUIREMENTS_FILE), $(executable)
+transfer_output_files = $$([string(MY.TARGET_ARCHIVE)])
+
+executable = build-dmagellan-tarball
+arguments = $(SOURCE_ARCHIVE) $$([string(MY.TARGET_ARCHIVE)]) $(REQUIREMENTS_FILE)
+environment = "PATH=/usr/local/bin:/usr/bin:/bin"
+
+request_cpus = 1
+request_memory = 1GB
+request_disk = 1GB
+
+# If the build fails, condor puts the job on hold due to not being able
+# to transfer the output file. If that happens, remove the job.
+periodic_remove = (JobStatus == 5) && (HoldReasonCode =?= 13)
+
+queue EL, suffix from (
+    6, _dmagellan
+)
