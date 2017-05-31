@@ -1,0 +1,5 @@
+#!/bin/bash
+
+rm -f build.log
+condor_submit build-dmagellan.sub && \
+    condor_wait -echo build.log
