@@ -14,11 +14,14 @@ requirements = (Target.OpSys == "LINUX") && \
                (Target.OpSysMajorVer == $(EL)) && \
                (IsBuildSlot == true)
 
+myexec = ../build-worker-tarball
+
 # I want to transfer the build script even if I'm running in interactive mode
-transfer_input_files = $(SOURCE_ARCHIVE), $(REQUIREMENTS_FILE), $(executable)
+# and $(executable) doesn't work (b/c condor_submit -i replaces it)
+transfer_input_files = $(SOURCE_ARCHIVE), $(REQUIREMENTS_FILE), $(myexec)
 transfer_output_files = $$([string(MY.TARGET_ARCHIVE)])
 
-executable = ../build-worker-tarball
+executable = $(myexec)
 arguments = $(SOURCE_ARCHIVE) $$([string(MY.TARGET_ARCHIVE)]) $(REQUIREMENTS_FILE)
 environment = "PATH=/usr/local/bin:/usr/bin:/bin"
 
