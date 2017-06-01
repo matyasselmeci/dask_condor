@@ -45,7 +45,7 @@ H = extract_feature_vecs(L, orig_A, orig_B,
                          '_id', 'l_id', 'r_id', 'id', 'id', 
                           feature_table=F, 
                           attrs_after='label', nchunks=4,
-                          show_progress=False, compute=True, 
+                          show_progress=True, compute=True, 
                          scheduler=client.get)
 
 
@@ -63,8 +63,7 @@ I = extract_feature_vecs(C, A, B,
                          '_id', 'l_id', 'r_id', 'id', 'id', 
                             nchunks=4,
                             feature_table=F,
-                            
-                            show_progress=False,
+                            show_progress=True,
                             compute=False)
 
 
@@ -75,5 +74,4 @@ predictions = dt.predict(table=I, exclude_attrs=['_id', 'l_id', 'r_id'],
 predictions.visualize()
 
 p = predictions.compute(get=client.get)
-
-# predictions.predicted.sum()
+print(p)
