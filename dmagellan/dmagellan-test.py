@@ -71,7 +71,8 @@ predictions = dt.predict(table=I, exclude_attrs=['_id', 'l_id', 'r_id'],
               append=True, target_attr='predicted', inplace=False,
                         nchunks=4, scheduler=client.get, compute=False)
 
-predictions.visualize()
+# Can't visualize - no graphviz
+#predictions.visualize()
 
 p = predictions.compute(get=client.get)
 print(p)
