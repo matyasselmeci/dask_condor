@@ -26,8 +26,8 @@ arguments = $(SOURCE_ARCHIVE) $$([string(MY.TARGET_ARCHIVE)]) $(REQUIREMENTS_FIL
 environment = "PATH=/usr/local/bin:/usr/bin:/bin"
 
 request_cpus = 1
-request_memory = 512MB
-request_disk = 512MB
+request_memory = 1GB
+request_disk = 1GB
 
 # If the build fails, condor puts the job on hold due to not being able
 # to transfer the output file. If that happens, remove the job.
