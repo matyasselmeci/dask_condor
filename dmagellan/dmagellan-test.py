@@ -38,9 +38,15 @@ logging.debug('loaded sample data')
 
 # blocking
 ob = OverlapBlocker()
-C = ob.block_tables(A, B, 'id', 'id', 'title', 'title', 
-                    overlap_size=3, nltable_chunks=2, nrtable_chunks=2, 
-                    scheduler=client.get, compute=False, 
+# can't run this with the full data - I get a "Failed to serialize" error
+# with the specifics "error: 'i' format requires -2147483648 <= number <= 2147483647"
+C = ob.block_tables(A, B, 'id', 'id', 'title', 'title',
+                    # increasing the chunks bloats the memory usage of the client
+                    # and also how long it takes before it creates tasks
+                    overlap_size=3, nltable_chunks=2, nrtable_chunks=2,
+                    # I set compute to True to see which part of the workflow was
+                    # taking a long time
+                    scheduler=client.get, compute=True,
                     rem_stop_words=True
                    )
 logging.debug('ran ob.block_tables()')
@@ -52,11 +58,18 @@ F = em.get_features_for_matching(A, B)
 logging.debug('ran em.get_features_for_matching()')
 
 # Convert L into feature vectors using updated F
-H = extract_feature_vecs(L, orig_A, orig_B, 
-                         '_id', 'l_id', 'r_id', 'id', 'id', 
-                          feature_table=F, 
+# must use orig_A and orig_B; I get a KeyError when I try to use the sample data
+# requires workers with > 1GB of memory, otherwise (sometimes) does not finish
+H = extract_feature_vecs(L, orig_A, orig_B,
+                         '_id', 'l_id', 'r_id', 'id', 'id',
+                          feature_table=F,
+                    # increasing the chunks bloats the memory usage of the client
+                    # and also how long it takes before it creates tasks
                           attrs_after='label', nchunks=4,
-                          show_progress=True, compute=True, 
+                          show_progress=True,
+                          # we have to compute here else mlmatcher will
+                          # complain that "Input table is not of type DataFrame"
+                          compute=True,
                          scheduler=client.get)
 logging.debug('ran H=extract_feature_vecs()')
 
@@ -73,7 +86,7 @@ logging.debug('ran dt.fit()')
 
 # Convert J into a set of feature vectors using F
 I = extract_feature_vecs(C, A, B,
-                         '_id', 'l_id', 'r_id', 'id', 'id', 
+                         '_id', 'l_id', 'r_id', 'id', 'id',
                             nchunks=4,
                             feature_table=F,
                             show_progress=True,
