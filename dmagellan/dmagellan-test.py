@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import logging, sys
+import logging, sys, getopt
 
 logging.basicConfig(level=0, format="%(asctime)-15s %(name)s %(message)s")
 
@@ -24,9 +24,39 @@ from dask.threaded import get
 from distributed import Client
 import py_entitymatching as em
 
-client = Client('127.0.0.1:8786')
-logging.debug('got client')
 
+def usage():
+	print("-h --help   :  this message")
+	print("-l --local  :  use LocalCluster() (i.e. multiprocessing)")
+	print("-s --sched  :  connect to scheduler on 127.0.0.1:8786")
+	print("Need one of -s, -l")
+
+try:
+	opts, _ = getopt.gnu_getopt(sys.argv[1:], 'hls', ['help', 'local', 'sched'])
+except getopt.GetoptError as err:
+	print(str(err))
+	usage()
+	sys.exit(2)
+
+client = None
+for o, _ in opts:
+	if o in ('-h', '--help'):
+		usage()
+		sys.exit()
+	elif o in ('-l', '--local'):
+		logging.info("Using LocalCluster")
+		client = Client()
+	elif o in ('-s', '--sched'):
+		logging.info("Connecting to scheduler at 127.0.0.1:8786")
+		client = Client('127.0.0.1:8786')
+	else:
+		assert False, 'unhandled option'
+if not client:
+	print("--local or --sched must be specified!")
+	sys.exit(2)
+
+
+logging.debug('got client')
 orig_A = pd.read_csv('./data/citeseer_nonans.csv', usecols=['id', 'title'])
 orig_B = pd.read_csv('./data/dblp_nonans.csv', usecols=['id', 'title'])
 logging.debug('loaded full data')
