@@ -38,13 +38,11 @@ logging.debug('loaded sample data')
 
 # blocking
 ob = OverlapBlocker()
-# can't run this with the full data - I get a "Failed to serialize" error
-# with the specifics "error: 'i' format requires -2147483648 <= number <= 2147483647"
 logging.debug("starting ob.block_tables()")
-C = ob.block_tables(A, B, 'id', 'id', 'title', 'title',
+C = ob.block_tables(orig_A, orig_B, 'id', 'id', 'title', 'title',
                     # increasing the chunks bloats the memory usage of the client
                     # and also how long it takes before it creates tasks
-                    overlap_size=3, nltable_chunks=2, nrtable_chunks=2,
+                    overlap_size=6, nltable_chunks=4, nrtable_chunks=4,
                     # I set compute to True to see which part of the workflow was
                     # taking a long time
                     scheduler=client.get, compute=True,
