@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import logging
+import logging, sys
 
 logging.basicConfig(level=0, format="%(asctime)-15s %(name)s %(message)s")
 
@@ -40,6 +40,7 @@ logging.debug('loaded sample data')
 ob = OverlapBlocker()
 # can't run this with the full data - I get a "Failed to serialize" error
 # with the specifics "error: 'i' format requires -2147483648 <= number <= 2147483647"
+logging.debug("starting ob.block_tables()")
 C = ob.block_tables(A, B, 'id', 'id', 'title', 'title',
                     # increasing the chunks bloats the memory usage of the client
                     # and also how long it takes before it creates tasks
@@ -49,7 +50,9 @@ C = ob.block_tables(A, B, 'id', 'id', 'title', 'title',
                     scheduler=client.get, compute=True,
                     rem_stop_words=True
                    )
-logging.debug('ran ob.block_tables()')
+logging.debug('finished ob.block_tables()')
+
+sys.exit(0)  # EXIT
 
 L = pd.read_csv('./data/sample_labeled_data.csv')
 logging.debug('loaded sample labeled data')
