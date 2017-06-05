@@ -27,8 +27,8 @@ import py_entitymatching as em
 client = Client('127.0.0.1:8786')
 logging.debug('got client')
 
-orig_A = pd.read_csv('./data/citeseer_nonans.csv')
-orig_B = pd.read_csv('./data/dblp_nonans.csv')
+orig_A = pd.read_csv('./data/citeseer_nonans.csv', usecols=['id', 'title'])
+orig_B = pd.read_csv('./data/dblp_nonans.csv', usecols=['id', 'title'])
 logging.debug('loaded full data')
 
 # sample datasets
