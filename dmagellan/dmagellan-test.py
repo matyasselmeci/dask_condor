@@ -79,6 +79,7 @@ C = ob.block_tables(orig_A, orig_B, 'id', 'id', 'title', 'title',
                     rem_stop_words=True
                    )
 logging.debug('finished ob.block_tables()')
+logging.debug('len(C) = %d' % len(C))
 
 sys.exit(0)  # EXIT
 
