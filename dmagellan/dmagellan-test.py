@@ -72,7 +72,9 @@ logging.debug("starting ob.block_tables()")
 C = ob.block_tables(orig_A, orig_B, 'id', 'id', 'title', 'title',
                     # increasing the chunks bloats the memory usage of the client
                     # and also how long it takes before it creates tasks
-                    overlap_size=6, nltable_chunks=4, nrtable_chunks=4,
+                    # but it's not a problem if I set usecols when loading orig_A
+                    # and orig_B, or if I use lz4 compression
+                    overlap_size=6, nltable_chunks=10, nrtable_chunks=10,
                     # I set compute to True to see which part of the workflow was
                     # taking a long time
                     scheduler=client.get, compute=True,
@@ -81,15 +83,14 @@ C = ob.block_tables(orig_A, orig_B, 'id', 'id', 'title', 'title',
 logging.debug('finished ob.block_tables()')
 logging.debug('len(C) = %d' % len(C))
 
-sys.exit(0)  # EXIT
-
 L = pd.read_csv('./data/sample_labeled_data.csv')
 logging.debug('loaded sample labeled data')
 
-F = em.get_features_for_matching(A, B)
+F = em.get_features_for_matching(orig_A, orig_B)
 logging.debug('ran em.get_features_for_matching()')
 
 # Convert L into feature vectors using updated F
+<<<<<<< HEAD
 # must use orig_A and orig_B; I get a KeyError when I try to use the sample data
 # requires workers with > 1GB of memory, otherwise (sometimes) does not finish
 H = extract_feature_vecs(L, orig_A, orig_B,
@@ -98,15 +99,24 @@ H = extract_feature_vecs(L, orig_A, orig_B,
                     # increasing the chunks bloats the memory usage of the client
                     # and also how long it takes before it creates tasks
                           attrs_after='label', nchunks=4,
+=======
+logging.debug("starting H=extract_feature_vecs()")
+H = extract_feature_vecs(L, orig_A, orig_B,
+                         '_id', 'l_id', 'r_id', 'id', 'id',
+                          feature_table=F,
+                          attrs_after='label', nchunks=20,
+>>>>>>> c5d7e20... Bump up chunks in block_tables and extract_feature_vecs and run extract_feature_vecs again
                           show_progress=True,
                           # we have to compute here else mlmatcher will
                           # complain that "Input table is not of type DataFrame"
                           compute=True,
                          scheduler=client.get)
-logging.debug('ran H=extract_feature_vecs()')
+logging.debug('finished H=extract_feature_vecs()')
+logging.debug("len(H) = %d" % len(H))
 
 
-print(H.head())
+sys.exit(0)  # EXIT ------------------------
+
 
 # Instantiate the matcher to evaluate.
 dt = DTMatcher(name='DecisionTree', random_state=0)
