@@ -4,7 +4,9 @@ Make dask workers using condor
 from __future__ import division, print_function
 
 import atexit
+import collections
 import errno
+import itertools
 import logging
 import os
 import tempfile
@@ -444,6 +446,20 @@ class HTCondorCluster(object):
         condor_rm(self.schedd, '%s && %s' % (
             self.scheduler_constraint,
             workers_constraint_by_name(names)))
+
+    def stats(self):
+        sch = self.scheduler
+        return collections.OrderedDict([
+              ('condor_running', len(self.running_jobs))
+            , ('condor_idle', len(self.idle_jobs))
+            , ('tot_ncores', sum(sch.ncores.values()))
+            , ('ntasks', len(sch.tasks))
+            , ('nfutures', len(sch.who_has))
+            , ('nidle', len(sch.idle))
+            , ('nprocessing', len(list(itertools.chain.from_iterable(
+                sch.processing.values()))))
+            , ('tot_occupancy', sum(sch.occupancy.values()))
+            ])
 
     def __del__(self):
         self.close()
