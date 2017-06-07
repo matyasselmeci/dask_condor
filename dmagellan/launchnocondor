@@ -1,0 +1,19 @@
+#!/bin/bash
+
+if [[ $# -ne 2 ]]; then
+	echo "Usage: ${0##*/} <threads> <procs>"
+	exit 2
+fi
+
+threads=$1
+procs=$2
+
+set -e
+
+. ./pythonenv.sh
+mkdir -p ~/_dask_local
+dask-scheduler --local-directory ~/_dask_local &
+sleep 10
+dask-worker --nthreads $threads --nprocs $procs --local-directory ~/_dask_local 127.0.0.1:8786 &
+
+wait
