@@ -90,23 +90,16 @@ F = em.get_features_for_matching(orig_A, orig_B)
 logging.debug('ran em.get_features_for_matching()')
 
 # Convert L into feature vectors using updated F
-<<<<<<< HEAD
 # must use orig_A and orig_B; I get a KeyError when I try to use the sample data
 # requires workers with > 1GB of memory, otherwise (sometimes) does not finish
+logging.debug("starting H=extract_feature_vecs()")
 H = extract_feature_vecs(L, orig_A, orig_B,
                          '_id', 'l_id', 'r_id', 'id', 'id',
                           feature_table=F,
                     # increasing the chunks bloats the memory usage of the client
                     # and also how long it takes before it creates tasks
-                          attrs_after='label', nchunks=4,
-=======
-logging.debug("starting H=extract_feature_vecs()")
-H = extract_feature_vecs(L, orig_A, orig_B,
-                         '_id', 'l_id', 'r_id', 'id', 'id',
-                          feature_table=F,
                           attrs_after='label', nchunks=20,
->>>>>>> c5d7e20... Bump up chunks in block_tables and extract_feature_vecs and run extract_feature_vecs again
-                          show_progress=True,
+                          show_progress=False,
                           # we have to compute here else mlmatcher will
                           # complain that "Input table is not of type DataFrame"
                           compute=True,
@@ -131,7 +124,7 @@ I = extract_feature_vecs(C, A, B,
                          '_id', 'l_id', 'r_id', 'id', 'id',
                             nchunks=4,
                             feature_table=F,
-                            show_progress=True,
+                            show_progress=False,
                             compute=False)
 logging.debug('ran I=extract_feature_vecs()')
 
