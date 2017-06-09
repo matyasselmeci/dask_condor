@@ -98,7 +98,7 @@ H = extract_feature_vecs(L, orig_A, orig_B,
                           feature_table=F,
                     # increasing the chunks bloats the memory usage of the client
                     # and also how long it takes before it creates tasks
-                          attrs_after='label', nchunks=20,
+                          attrs_after='label', nchunks=10,
                           show_progress=False,
                           # we have to compute here else mlmatcher will
                           # complain that "Input table is not of type DataFrame"
