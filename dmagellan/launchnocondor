@@ -1,7 +1,14 @@
 #!/bin/bash
 
+if [[ ${1-} == "-conda" ]]; then
+	conda=true
+	shift
+else
+	conda=false
+fi
+
 if [[ $# -ne 2 ]]; then
-	echo "Usage: ${0##*/} <threads> <procs>"
+	echo "Usage: ${0##*/} [-conda] <threads> <procs>"
 	exit 2
 fi
 
@@ -10,7 +17,11 @@ procs=$2
 
 set -e
 
-. ./pythonenv.sh
+if $conda; then
+	. ~/miniconda2/env.sh
+else
+	. ./pythonenv.sh
+fi
 mkdir -p ~/_dask_local
 dask-scheduler --local-directory ~/_dask_local &
 sleep 10
