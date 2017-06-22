@@ -1,9 +1,11 @@
 #!/bin/bash
 
 if [[ ${1-} == "-conda" ]]; then
+	echo "launching with conda"
 	conda=true
 	shift
 else
+	echo "launching without conda"
 	conda=false
 fi
 
