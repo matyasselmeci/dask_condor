@@ -9,7 +9,7 @@ logging.basicConfig(level=0)
 logging.getLogger("distributed.comm.tcp").setLevel(logging.ERROR)
 logging.getLogger("distributed.deploy.adaptive").setLevel(logging.WARNING)
 
-worker_tarball="dask_condor_worker_dmagellan.SL6.tar.gz"
+worker_tarball="dask_condor_worker_dmagellan.854e51d.SL6.tar.gz"
 
 if os.path.exists(os.path.join('/squid/matyas', worker_tarball)):
     worker_tarball = "http://proxy.chtc.wisc.edu/SQUID/matyas/" + worker_tarball
