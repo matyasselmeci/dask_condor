@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import logging, sys, getopt
+import logging, sys, argparse
 
 logging.basicConfig(level=0, format="%(asctime)-15s %(name)s %(message)s")
 
@@ -25,57 +25,33 @@ from distributed import Client
 import py_entitymatching as em
 
 
-def usage():
-    print("-h --help               :  this message")
-    print("-l --local              :  use LocalCluster() (i.e. multiprocessing)")
-    print("-s --sched              :  connect to scheduler on 127.0.0.1:8786")
-    print("--block-tables-chunks=N :  number of chunks to use in ob.block_tables")
-    print("--extract-feature-vecs-chunks=N :  number of chunks to use in extract_feature_vecs")
-    print("--usecols               :  load a subset of the columns from the datafile")
-    print("Need one of -s, -l")
+parser = argparse.ArgumentParser(description="dmagellan test")
+parser.add_argument('client_type', choices=['local', 'sched'],
+                    help='use LocalCluster or a scheduler on 127.0.0.1:8786')
+parser.add_argument('--block-tables-chunks', metavar='N', type=int, default=4,
+                    help='number of chunks to use in ob.block_tables')
+parser.add_argument('--extract-feature-vecs-chunks', metavar='N', type=int, default=4,
+                    help='number of chunks to use in extract_feature_vecs')
+parser.add_argument('--usecols', action='store_const', const=['id', 'title'], default=None,
+                    help='load a subset of the columns from the datafile')
+args = parser.parse_args()
 
-try:
-    opts, _ = getopt.gnu_getopt(
-        sys.argv[1:], 'hls', ['block-tables-chunks=', 'help',  'local', 'sched', 'usecols'])
-except getopt.GetoptError as err:
-    print(str(err))
-    usage()
-    sys.exit(2)
-
-client = None
-usecols = None
-block_tables_chunks = 4
-extract_feature_vecs_chunks = 4
-for o, a in opts:
-    if o in ('-h', '--help'):
-        usage()
-        sys.exit()
-    elif o == '--block-tables-chunks':
-        block_tables_chunks = a
-    elif o == '--extract-feature-vecs-chunks':
-        extract_feature_vecs_chunks = a
-    elif o in ('-l', '--local'):
-        logging.info("Using LocalCluster")
-        client = Client()
-    elif o in ('-s', '--sched'):
-        logging.info("Connecting to scheduler at 127.0.0.1:8786")
-        client = Client('127.0.0.1:8786')
-    elif o == '--usecols':
-        usecols = ['id', 'title']
-    else:
-        assert False, 'unhandled option'
-if not client:
-    print("--local or --sched must be specified!")
-    sys.exit(2)
-logging.debug('got client')
+if args.client_type == 'local':
+    logging.info("Using LocalCluster")
+    client = Client()
+elif args.client_type == 'sched':
+    logging.info("Connecting to scheduler at 127.0.0.1:8786")
+    client = Client('127.0.0.1:8786')
+else:
+    assert False, 'should have been caught'
 
 logging.info("Parameters:")
-logging.info("block_tables_chunks: %s" % block_tables_chunks)
-logging.info("extract_feature_vecs_chunks: %s" % extract_feature_vecs_chunks)
-logging.info("usecols: %s" % usecols)
+logging.info("block_tables_chunks: %s" % args.block_tables_chunks)
+logging.info("extract_feature_vecs_chunks: %s" % args.extract_feature_vecs_chunks)
+logging.info("usecols: %s" % args.usecols)
 
-orig_A = pd.read_csv('./data/citeseer_nonans.csv', usecols=usecols)
-orig_B = pd.read_csv('./data/dblp_nonans.csv', usecols=usecols)
+orig_A = pd.read_csv('./data/citeseer_nonans.csv', usecols=args.usecols)
+orig_B = pd.read_csv('./data/dblp_nonans.csv', usecols=args.usecols)
 logging.debug('loaded full data')
 
 # sample datasets
@@ -91,7 +67,7 @@ C = ob.block_tables(orig_A, orig_B, 'id', 'id', 'title', 'title',
                     # and also how long it takes before it creates tasks
                     # but it's not a problem if I set usecols when loading orig_A
                     # and orig_B, or if I use lz4 compression
-                    overlap_size=6, nltable_chunks=block_tables_chunks, nrtable_chunks=block_tables_chunks,
+                    overlap_size=6, nltable_chunks=args.block_tables_chunks, nrtable_chunks=args.block_tables_chunks,
                     # I set compute to True to see which part of the workflow was
                     # taking a long time
                     scheduler=client.get, compute=True,
@@ -115,7 +91,7 @@ H = extract_feature_vecs(L, orig_A, orig_B,
                           feature_table=F,
                     # increasing the chunks bloats the memory usage of the client
                     # and also how long it takes before it creates tasks
-                          attrs_after='label', nchunks=extract_feature_vecs_chunks,
+                          attrs_after='label', nchunks=args.extract_feature_vecs_chunks,
                           show_progress=False,
                           # we have to compute here else mlmatcher will
                           # complain that "Input table is not of type DataFrame"
@@ -139,7 +115,7 @@ logging.debug('ran dt.fit()')
 # Convert J into a set of feature vectors using F
 I = extract_feature_vecs(C, A, B,
                          '_id', 'l_id', 'r_id', 'id', 'id',
-                            nchunks=extract_feature_vecs_chunks,
+                            nchunks=args.extract_feature_vecs_chunks,
                             feature_table=F,
                             show_progress=False,
                             compute=False)
