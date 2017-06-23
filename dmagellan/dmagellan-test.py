@@ -101,8 +101,6 @@ logging.debug('finished H=extract_feature_vecs()')
 logging.debug("len(H) = %d" % len(H))
 
 
-sys.exit(0)  # EXIT ------------------------
-
 
 # Instantiate the matcher to evaluate.
 dt = DTMatcher(name='DecisionTree', random_state=0)
