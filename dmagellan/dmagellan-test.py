@@ -111,7 +111,7 @@ dt.fit(table=H,
 logging.debug('ran dt.fit()')
 
 # Convert J into a set of feature vectors using F
-I = extract_feature_vecs(C, A, B,
+I = extract_feature_vecs(C, orig_A, orig_B,
                          '_id', 'l_id', 'r_id', 'id', 'id',
                             nchunks=args.extract_feature_vecs_chunks,
                             feature_table=F,
