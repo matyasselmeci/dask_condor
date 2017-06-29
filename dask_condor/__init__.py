@@ -461,6 +461,10 @@ class HTCondorCluster(object):
             , ('tot_occupancy', sum(sch.occupancy.values()))
             ])
 
+    def print_stats(self):
+        for k,v in self.stats().items():
+            print("%-20s: %5s" % (k,v))
+
     def __del__(self):
         self.close()
 
