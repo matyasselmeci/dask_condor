@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import logging, sys, argparse
+import logging, sys, argparse, os
 
 logging.basicConfig(level=0, format="%(asctime)-15s %(name)s %(message)s")
 
@@ -26,14 +26,17 @@ import py_entitymatching as em
 
 
 parser = argparse.ArgumentParser(description="dmagellan test")
-parser.add_argument('client_type', choices=['local', 'sched'],
-                    help='use LocalCluster or a scheduler on 127.0.0.1:8786')
+parser.add_argument('client_type', choices=['local', 'sched', 'condor'],
+                    help='use LocalCluster, a scheduler on 127.0.0.1:8786, or '
+                    'an HTCondorCluster')
 parser.add_argument('--block-tables-chunks', metavar='N', type=int, default=4,
                     help='number of chunks to use in ob.block_tables')
 parser.add_argument('--extract-feature-vecs-chunks', metavar='N', type=int, default=4,
                     help='number of chunks to use in extract_feature_vecs')
 parser.add_argument('--usecols', action='store_const', const=['id', 'title'], default=None,
                     help='load a subset of the columns from the datafile')
+parser.add_argument('--workers', type=int, default=16,
+                    help='Number of workers to start ("condor" client only)')
 args = parser.parse_args()
 
 if args.client_type == 'local':
@@ -42,6 +45,23 @@ if args.client_type == 'local':
 elif args.client_type == 'sched':
     logging.info("Connecting to scheduler at 127.0.0.1:8786")
     client = Client('127.0.0.1:8786')
+elif args.client_type == 'condor':
+    logging.info("Creating HTCondorCluster")
+    from dask_condor import HTCondorCluster
+
+    worker_tarball="dask_condor_worker_dmagellan.854e51d.SL6.tar.gz"
+    if os.path.exists(os.path.join('/squid/matyas', worker_tarball)):
+        worker_tarball = "http://proxy.chtc.wisc.edu/SQUID/matyas/" + worker_tarball
+    elif not os.path.exists(worker_tarball):
+        worker_tarball = "http://research.cs.wisc.edu/~matyas/dask_condor/" + worker_tarball
+
+    htc = HTCondorCluster(memory_per_worker=4096,
+                          update_interval=10000,
+                          worker_tarball=worker_tarball,
+                          logdir=".log")
+    htc.start_workers(n=args.workers)
+
+    client = Client(htc)
 else:
     assert False, 'should have been caught'
 
