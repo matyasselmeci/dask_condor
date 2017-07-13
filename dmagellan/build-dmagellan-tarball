@@ -1,0 +1,162 @@
+#!/bin/bash
+
+# Build Python, install the dependencies for dask, add dmagellan, 
+# and package it up in a tarball.
+
+set -eux
+
+
+realpath () {
+    python -c "import os, sys; sys.stdout.write(os.path.realpath(r'''$1''') + '\n')"
+}
+
+
+if [[ -n $_CONDOR_SCRATCH_DIR ]]; then
+	HOME="$_CONDOR_SCRATCH_DIR"
+	TMPDIR=${TMPDIR:-$_CONDOR_SCRATCH_DIR/tmp}
+	mkdir -p "$TMPDIR"
+	export HOME TMPDIR
+fi
+
+work_dir=$(mktemp -dt dask_condor_worker.XXXXXX)
+# if not running under condor, clean up the work dir ourselves; otherwise,
+# condor will do that for us on job removal, and for interactive jobs, we'd
+# like to keep it for debugging
+[[ -n $_CONDOR_SCRATCH_DIR ]] || trap 'rm -rf "$work_dir"' EXIT
+
+if [[ $# -lt 2 ]]; then
+    echo "Usage: $(basename $0) <source_archive> <target_archive> [<extra_requirements_file>]"
+    echo
+    echo "<source_archive>              The .tar.xz file containing the version of Python"
+    echo "                              to package."
+    echo "<target_archive>              The path to write the worker tarball to."
+    echo "<extra_requirements_file>     Python modules to install (in addition to"
+    echo "                              dask.distributed and dependencies)."
+    echo "                              (Optional)"
+    exit 2
+fi
+
+python_source_archive=$(realpath "$1")
+python_target_archive=$(realpath "$2")
+if [[ -n ${3-} ]]; then
+    extra_requirements_file=$(realpath "$3")
+else
+    extra_requirements_file=
+fi
+python_build_dir=$work_dir/$(basename "$python_source_archive" .tar.xz)
+python_install_dir=$work_dir/dask_condor_worker
+python_bin_dir=$python_install_dir/bin
+dmagellan_dir=$work_dir/dmagellan
+
+
+# DEBUGGING
+hostname -f || :
+env | sort || :
+
+
+# If the SSL headers aren't installed, Python will silently fail to build the
+# `_ssl` module, causing pip to fail because it can't use HTTPS.
+echo '*** Checking requirements'
+if [[ ! -f /usr/include/openssl/ssl.h ]]; then
+    echo '*** OpenSSL development headers not found'
+    echo 'On an RPM system, these should be in the "openssl-devel" package'
+    exit 1
+fi
+
+if [[ ! -f $python_source_archive ]]; then
+    echo "*** Python source archive not found at $python_source_archive"
+    exit 1
+fi
+
+
+cd "$work_dir"
+xzcat "$python_source_archive" | tar x
+cd "$python_build_dir"
+
+if ! ./configure --prefix="$python_install_dir" --with-ensurepip=install; then
+    echo "*** configure failed. config.log follows:"
+    cat config.log
+    exit 1
+fi
+make
+make install
+
+if [[ ! -x $python_bin_dir/python ]]; then
+    # We don't have an actual executable named `python`. We may have one named
+    # python2 or python3; in that case, make a copy
+    cp "$python_bin_dir"/python[2-9] "$python_bin_dir/python"
+fi
+
+PATH=$python_bin_dir:$PATH
+export PATH
+
+echo '*** Testing that Python got properly installed'
+python - <<__end__
+import sys
+from distutils import sysconfig
+sys.stdout.write(sysconfig.PREFIX + '\n')
+
+import ssl
+sys.stdout.write('ok\n')
+__end__
+
+echo '*** Downloading and installing dask.distributed'
+pip install dask distributed numpy pandas
+
+echo '*** Testing that dask.distributed got properly installed'
+python - <<__end__
+import dask, dask.array, dask.bag, dask.dataframe, distributed, sys
+sys.stdout.write('ok\n')
+__end__
+which dask-worker
+
+if [[ -n $extra_requirements_file ]]; then
+    echo '*** Downloading and installing extra requirements'
+    pip install -r "$extra_requirements_file"
+fi
+
+echo '*** Cloning and installing dmagellan'
+git clone -b chtc https://github.com/kvpradap/dmagellan "$dmagellan_dir"
+cd "$dmagellan_dir"
+python setup.py build_ext --inplace
+python setup.py install
+
+echo '*** Testing dmagellan'
+python - <<__end__
+from dmagellan.blocker.attrequivalence.attr_equiv_blocker import AttrEquivalenceBlocker
+from dmagellan.blocker.overlap.overlapblocker import OverlapBlocker
+from dmagellan.blocker.blackbox.blackbox_blocker import BlackBoxBlocker
+from dmagellan.blocker.rulebased.rule_based_blocker import RuleBasedBlocker
+from dmagellan.feature.autofeaturegen import get_features_for_blocking
+from dmagellan.feature.extractfeatures import extract_feature_vecs
+from dmagellan.feature.autofeaturegen import get_features_for_matching
+from dmagellan.matcher.dtmatcher import DTMatcher
+from dmagellan.utils.py_utils.utils import concat_df
+import sys
+sys.stdout.write('ok\n')
+__end__
+
+echo '*** Making package relocatable'
+# This generates a ton of output in trace mode so turn it off
+set +x
+find "$python_install_dir" -type f -print | while read filename; do
+    # -I skips 'binary' files
+    grep -qFI "$python_install_dir" "$filename" || continue
+    sed -i -e "s|$python_install_dir|XXXINSTALLDIRXXX|g" "$filename"
+done
+set -x
+
+cat - > "$python_install_dir"/fixpaths.sh <<'__end__'
+#!/bin/bash
+dir=$(dirname "$0")
+dir_abs=$(python -c "import os, sys; sys.stdout.write(os.path.realpath(r'''$dir''') + '\n')")
+find "$dir" -type f -print | while read filename; do
+    grep -qFI "XXXINSTALLDIRXXX" "$filename" || continue
+    sed -i -e "s|XXXINSTALLDIRXXX|$dir_abs|g" "$filename"
+done
+__end__
+chmod +x "$python_install_dir"/fixpaths.sh
+
+echo '*** Tarring up results'
+cd "$work_dir"
+tar czf "$python_target_archive" "$(basename "$python_install_dir")"

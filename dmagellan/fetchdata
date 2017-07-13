@@ -1,0 +1,5 @@
+#!/bin/bash
+mkdir -p data
+cd data
+wget http://pradap-www.cs.wisc.edu/chtc/chtc_datasets.tgz
+tar xzf chtc_datasets.tgz

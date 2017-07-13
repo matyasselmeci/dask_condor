@@ -1,0 +1,10 @@
+#!/bin/bash
+
+if [[ $1 == "-conda" ]]; then
+	. ~/miniconda2/env.sh
+else
+	. ./pythonenv.sh
+fi
+python=python
+which ipython &> /dev/null && python=ipython
+exec $python -i launch.py
