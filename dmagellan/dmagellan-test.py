@@ -31,6 +31,8 @@ parser.add_argument('client_type', choices=['local', 'sched', 'condor'],
                     'an HTCondorCluster')
 parser.add_argument('--block-tables-chunks', metavar='N', type=int, default=4,
                     help='number of chunks to use in ob.block_tables')
+parser.add_argument('--block-tables-sample-data', action='store_true',
+                    help='Use sample data in block_tables (faster)')
 parser.add_argument('--extract-feature-vecs-chunks', metavar='N', type=int, default=4,
                     help='number of chunks to use in extract_feature_vecs')
 parser.add_argument('--usecols', action='store_const', const=['id', 'title'], default=None,
@@ -67,6 +69,7 @@ else:
 
 logging.info("Parameters:")
 logging.info("block_tables_chunks: %s" % args.block_tables_chunks)
+logging.info("block_tables_sample_data: %s" % args.block_tables_sample_data)
 logging.info("extract_feature_vecs_chunks: %s" % args.extract_feature_vecs_chunks)
 logging.info("usecols: %s" % args.usecols)
 
@@ -82,7 +85,9 @@ logging.debug('loaded sample data')
 # blocking
 ob = OverlapBlocker()
 logging.debug("starting ob.block_tables()")
-C = ob.block_tables(orig_A, orig_B, 'id', 'id', 'title', 'title',
+block_tables_A = A if args.block_tables_sample_data else orig_A
+block_tables_B = B if args.block_tables_sample_data else orig_B
+C = ob.block_tables(block_tables_A, block_tables_B, 'id', 'id', 'title', 'title',
                     # increasing the chunks bloats the memory usage of the client
                     # and also how long it takes before it creates tasks
                     # but it's not a problem if I set usecols when loading orig_A
