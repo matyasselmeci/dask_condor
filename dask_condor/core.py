@@ -206,10 +206,6 @@ class HTCondorCluster(object):
                  **kwargs):
 
         self.logger = logger or logging.getLogger(__name__)
-        if 'procs_per_worker' in kwargs:
-            self.logger.warning("Multiple processes and adaptive scaling"
-                                " don't mix; ignoring procs_per_worker")
-        self.procs_per_worker = 1
         self.memory_per_worker = memory_per_worker
         self.disk_per_worker = disk_per_worker
         self.threads_per_worker = threads_per_worker
@@ -321,7 +317,6 @@ class HTCondorCluster(object):
                       n=1,
                       memory_per_worker=None,
                       disk_per_worker=None,
-                      procs_per_worker=None,
                       threads_per_worker=None,
                       worker_timeout=None,
                       transfer_files=None,
@@ -357,9 +352,6 @@ class HTCondorCluster(object):
         n = int(n)
         if n < 1:
             raise ValueError("n must be >= 1")
-        if procs_per_worker:
-            self.logger.warning("Multiple processes and adaptive scaling"
-                                " don't mix; ignoring procs_per_worker")
         memory_per_worker = int(memory_per_worker or self.memory_per_worker)
         if memory_per_worker < 1:
             raise ValueError("memory_per_worker must be >= 1 (MB)")
