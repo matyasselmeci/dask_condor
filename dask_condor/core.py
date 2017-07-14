@@ -108,6 +108,9 @@ _global_schedulers = []  # (scheduler_id, schedd)
 
 @atexit.register
 def global_killall():
+    """Kill all worker jobs connected to known schedulers.
+
+    """
     for sid, schedd in _global_schedulers:
         util.condor_rm(schedd, 'DaskSchedulerId == "%s"' % sid)
 
@@ -117,6 +120,75 @@ class Error(Exception):
 
 
 class HTCondorCluster(object):
+    """
+    Cluster manager for workers run as HTCondor jobs.
+
+    Runs a `distributed.scheduler.Scheduler` listening on the local
+    machine, and contains methods for launching and managing
+    ``dask-worker`` processes that are submitted as HTCondor jobs and run
+    remotely.  Starts up a `Scheduler` immediately (via
+    `distributed.LocalCluster`) but does not submit any worker jobs until
+    told to do so (usually by `start_workers`).
+
+    It is not necessary to use a shared filesystem or pre-distribute
+    Python, Dask, Python libraries, or data to the execute nodes before
+    sending Dask.distributed jobs to them: `HTCondorCluster` can send a
+    "worker tarball" that contains the Python environment, and extra
+    files (e.g. data) as desired.
+
+    The "worker tarball" must have a directory called
+    ``dask_condor_worker`` with at least the following contents:
+
+    - a Python installation (with interpreter in ``bin/python``)
+    - Dask and Dask.distributed installed (e.g. using pip) such that the
+      ``dask-worker`` executable is located in ``bin/``
+    - a script called ``fixpaths.sh`` that makes sure paths embedded in
+      files point to the correct absolute path under the execute
+      directory
+
+
+    Parameters
+    ----------
+    memory_per_worker, disk_per_worker, threads_per_worker,
+    worker_timeout, transfer_files : optional
+        Default parameters for worker jobs.  See `start_workers` for
+        a description.
+    pool : str, optional
+        An IP address:port pair of the HTCondor collector to query to
+        find out how to contact the HTCondor schedd.  Only used if
+        `schedd_name` is also specified.  If not specified, the value of
+        the HTCondor configuration variable ``COLLECTOR_HOST`` is used.
+    schedd_name : str, optional
+        The location (IP address:port) of the schedd to submit jobs to.
+        If not specified, the local schedd is used.
+    update_interval : int, optional
+        In milliseconds, how often to query the schedd to update classad
+        information of the worker jobs.
+    worker_tarball : str or None, optional
+        The path to a tarball to upload that contains the Dask worker
+        and the Python environment needed to run it.  See above for the
+        requirements.  If not specified or None, no tarball is transferred
+        and ``dask-worker`` is run from ``$PATH``.
+    pre_script : str or None, optional
+        The path to a script that should be run on the remote node after
+        unpacking the worker tarball (if there is one), but before
+        executing ``dask-worker``.  Use this if you need to prepare data
+        (e.g. extract transferred files).  If not specified or None, no
+        extra script is run.
+    logdir : str, optional
+        The path to a directory to place HTCondor job output and logs
+        into.  One log file (containing stdout and stderr) is generated
+        per HTCondor job, plus another log file (containing job status)
+        per HTCondor cluster, so it might be worth placing them into a
+        separate directory.  The directory will be created if it does not
+        exist.  If not specified, the current directory is used.
+    logger : `logging.Logger` or None, optional
+        A standard Python `Logger` object to write logs to.  If not
+        specified, the logger for this module is used.
+
+    Other parameters are passed into `distributed.LocalCluster` as-is.
+
+    """
     def __init__(self,
                  memory_per_worker=1024,
                  disk_per_worker=1048576,
@@ -254,6 +326,34 @@ class HTCondorCluster(object):
                       worker_timeout=None,
                       transfer_files=None,
                       extra_attribs=None):
+        """Start `n` worker jobs in a single HTCondor job cluster.
+
+        The default values for the parameters are instance variables but
+        may be overridden here.
+
+        Parameters
+        ----------
+        n : int, optional
+            Number of worker jobs to start (default 1).
+        memory_per_worker : int, optional
+            Memory (in MB) to request for each worker job.
+        disk_per_worker : int, optional
+            Disk space (in KB) to request for each worker job.
+        threads_per_worker : int, optional
+            Number of threads to use in each worker.  Raising this
+            increases the number of cores requested for the job.
+        worker_timeout : int, optional
+            Maximum running time of a worker job, in seconds.  After this,
+            the job is held.
+        transfer_files : str or list of str, optional
+            Additional files (not including the worker tarball) to
+            transfer as part of a worker job.  If a str, should be
+            comma-separated.
+        extra_attribs: dict of str, optional
+            Additional submit file attributes to include in a worker
+            job.  Will be added to the htcondor.Submit object as-is.
+
+        """
         n = int(n)
         if n < 1:
             raise ValueError("n must be >= 1")
@@ -303,9 +403,21 @@ class HTCondorCluster(object):
             self.jobs[ad['JobId']] = ad
 
     def killall(self):
+        """Remove all workers.
+
+        """
         util.condor_rm(self.schedd, self.scheduler_constraint)
 
     def stop_workers(self, worker_ids):
+        """Remove specific workers.
+
+        Parameters
+        ----------
+        worker_ids : str or list of str
+            One or more HTCondor job or cluster IDs that correspond to
+            workers started by this HTCondorCluster.
+
+        """
         if isinstance(worker_ids, str):
             worker_ids = [worker_ids]
 
@@ -318,6 +430,9 @@ class HTCondorCluster(object):
         util.condor_rm(self.schedd, constraint)
 
     def update_jobs(self):
+        """Update the classad information about known workers.
+
+        """
         # Don't want to leave the original in a half-updated state
         new_jobs = {}
         try:
@@ -352,6 +467,9 @@ class HTCondorCluster(object):
                 raise
 
     def close(self):
+        """Shut off the cluster and all workers.
+
+        """
         self.killall()
         self.local_cluster.close()
         if self.script:
@@ -375,6 +493,22 @@ class HTCondorCluster(object):
             tar.close()
 
     def scale_up(self, n):
+        """Ensure we have at least `n` workers available to run in the queue.
+
+        The worker jobs may be in 'idle' or 'running' state.  If any
+        worker jobs are in the 'held' state due to hitting their timeout,
+        they will be released (returned to 'idle' state).
+
+        Parameters
+        ----------
+        n
+            The number of workers.
+
+        Notes
+        -----
+        This is primarily to satisfy the Adaptive interface.
+
+        """
         n_idle_jobs = len(self.idle_jobs)
         n_running_jobs = len(self.running_jobs)
         timed_out_jobids = self.timed_out_jobs.keys()
@@ -400,6 +534,18 @@ class HTCondorCluster(object):
         self.start_workers(n=n_needed)
 
     def scale_down(self, workers):
+        """Shut off specific workers by IP:port address.
+
+        Parameters
+        ----------
+        workers : list of str
+            Worker IP:port addresses
+
+        Notes
+        -----
+        This is primarily to satisfy the Adaptive interface.
+
+        """
         # `workers` is worker addresses
         worker_info = self.scheduler.worker_info
         names = []
@@ -418,6 +564,15 @@ class HTCondorCluster(object):
             util.workers_constraint_by_name(names)))
 
     def stats(self):
+        """Useful statistics about the scheduler.
+
+        Returns
+        -------
+        stats : OrderedDict of ints
+            Several statistics which may be of use for checking the
+            scheduler status.
+
+        """
         sch = self.scheduler
         return collections.OrderedDict([
               ('condor_running', len(self.running_jobs))
@@ -432,6 +587,9 @@ class HTCondorCluster(object):
             ])
 
     def print_stats(self):
+        """Print statistics about the scheduler.
+
+        """
         for k,v in self.stats().items():
             print("%-20s: %5s" % (k,v))
 
