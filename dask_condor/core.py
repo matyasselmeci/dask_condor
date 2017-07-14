@@ -195,7 +195,7 @@ class HTCondorCluster(object):
                  pool=None,
                  schedd_name=None,
                  threads_per_worker=1,
-                 update_interval=1000,
+                 update_interval=10000,
                  worker_timeout=(24 * 60 * 60),
                  scheduler_port=8786,
                  worker_tarball=None,
