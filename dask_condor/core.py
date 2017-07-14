@@ -120,6 +120,75 @@ class Error(Exception):
 
 
 class HTCondorCluster(object):
+    """
+    Cluster manager for workers run as HTCondor jobs.
+
+    Runs a `distributed.scheduler.Scheduler` listening on the local
+    machine, and contains methods for launching and managing
+    ``dask-worker`` processes that are submitted as HTCondor jobs and run
+    remotely.  Starts up a `Scheduler` immediately (via
+    `distributed.LocalCluster`) but does not submit any worker jobs until
+    told to do so (usually by `start_workers`).
+
+    It is not necessary to use a shared filesystem or pre-distribute
+    Python, Dask, Python libraries, or data to the execute nodes before
+    sending Dask.distributed jobs to them: `HTCondorCluster` can send a
+    "worker tarball" that contains the Python environment, and extra
+    files (e.g. data) as desired.
+
+    The "worker tarball" must have a directory called
+    ``dask_condor_worker`` with at least the following contents:
+
+    - a Python installation (with interpreter in ``bin/python``)
+    - Dask and Dask.distributed installed (e.g. using pip) such that the
+      ``dask-worker`` executable is located in ``bin/``
+    - a script called ``fixpaths.sh`` that makes sure paths embedded in
+      files point to the correct absolute path under the execute
+      directory
+
+
+    Parameters
+    ----------
+    memory_per_worker, disk_per_worker, threads_per_worker,
+    worker_timeout, transfer_files : optional
+        Default parameters for worker jobs.  See `start_workers` for
+        a description.
+    pool : str, optional
+        An IP address:port pair of the HTCondor collector to query to
+        find out how to contact the HTCondor schedd.  Only used if
+        `schedd_name` is also specified.  If not specified, the value of
+        the HTCondor configuration variable ``COLLECTOR_HOST`` is used.
+    schedd_name : str, optional
+        The location (IP address:port) of the schedd to submit jobs to.
+        If not specified, the local schedd is used.
+    update_interval : int, optional
+        In milliseconds, how often to query the schedd to update classad
+        information of the worker jobs.
+    worker_tarball : str or None, optional
+        The path to a tarball to upload that contains the Dask worker
+        and the Python environment needed to run it.  See above for the
+        requirements.  If not specified or None, no tarball is transferred
+        and ``dask-worker`` is run from ``$PATH``.
+    pre_script : str or None, optional
+        The path to a script that should be run on the remote node after
+        unpacking the worker tarball (if there is one), but before
+        executing ``dask-worker``.  Use this if you need to prepare data
+        (e.g. extract transferred files).  If not specified or None, no
+        extra script is run.
+    logdir : str, optional
+        The path to a directory to place HTCondor job output and logs
+        into.  One log file (containing stdout and stderr) is generated
+        per HTCondor job, plus another log file (containing job status)
+        per HTCondor cluster, so it might be worth placing them into a
+        separate directory.  The directory will be created if it does not
+        exist.  If not specified, the current directory is used.
+    logger : `logging.Logger` or None, optional
+        A standard Python `Logger` object to write logs to.  If not
+        specified, the logger for this module is used.
+
+    Other parameters are passed into `distributed.LocalCluster` as-is.
+
+    """
     def __init__(self,
                  memory_per_worker=1024,
                  disk_per_worker=1048576,
@@ -257,7 +326,7 @@ class HTCondorCluster(object):
                       worker_timeout=None,
                       transfer_files=None,
                       extra_attribs=None):
-        """Start `n` worker jobs in a single HTCondor cluster.
+        """Start `n` worker jobs in a single HTCondor job cluster.
 
         The default values for the parameters are instance variables but
         may be overridden here.
@@ -278,10 +347,10 @@ class HTCondorCluster(object):
             the job is held.
         transfer_files : str or list of str, optional
             Additional files (not including the worker tarball) to
-            transfer as part of the worker job.  If a str, should be
+            transfer as part of a worker job.  If a str, should be
             comma-separated.
         extra_attribs: dict of str, optional
-            Additional submit file attributes to include in the worker
+            Additional submit file attributes to include in a worker
             job.  Will be added to the htcondor.Submit object as-is.
 
         """
