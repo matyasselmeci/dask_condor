@@ -271,7 +271,7 @@ class HTCondorCluster(object):
         self.jobs = {}  # {jobid: CLASSAD}
         self.ignored_jobs = set()  # set of jobids
         self._update_callback = tornado.ioloop.PeriodicCallback(
-            callback=self.update_jobs,
+            callback=self._update_jobs,
             callback_time=update_interval,
             io_loop=self.scheduler.loop)
         self._update_callback.start()
@@ -429,7 +429,7 @@ class HTCondorCluster(object):
 
         util.condor_rm(self.schedd, constraint)
 
-    def update_jobs(self):
+    def _update_jobs(self):
         """Update the classad information about known workers.
 
         """
