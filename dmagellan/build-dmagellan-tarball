@@ -157,6 +157,12 @@ done
 __end__
 chmod +x "$python_install_dir"/fixpaths.sh
 
+echo '*** Recording package list'
+pip list --format=columns | tee "$python_install_dir"/package-list.txt
+
+echo '*** Recording dmagellan Git hash'
+git --git-dir "$dmagellan_dir"/.git rev-parse HEAD | tee "$python_install_dir"/dmagellan-git.txt
+
 echo '*** Tarring up results'
 cd "$work_dir"
 tar czf "$python_target_archive" "$(basename "$python_install_dir")"
