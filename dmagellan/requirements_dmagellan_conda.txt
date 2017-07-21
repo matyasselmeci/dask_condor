@@ -1,0 +1,5 @@
+cython
+scipy
+chest
+lz4
+python-snappy

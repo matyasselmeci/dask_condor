@@ -51,13 +51,14 @@ elif args.client_type == 'condor':
     logging.info("Creating HTCondorCluster")
     from dask_condor import HTCondorCluster
 
-    worker_tarball="dask_condor_worker_dmagellan.854e51d.SL6.tar.gz"
+    worker_tarball="dask_condor_worker_dmagellan_conda.SL6.tar.gz"
     if os.path.exists(os.path.join('/squid/matyas', worker_tarball)):
         worker_tarball = "http://proxy.chtc.wisc.edu/SQUID/matyas/" + worker_tarball
     elif not os.path.exists(worker_tarball):
         worker_tarball = "http://research.cs.wisc.edu/~matyas/dask_condor/" + worker_tarball
 
     htc = HTCondorCluster(memory_per_worker=4096,
+                          disk_per_worker=4096*1024,
                           update_interval=10000,
                           worker_tarball=worker_tarball,
                           logdir=".log")
