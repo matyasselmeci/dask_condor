@@ -136,6 +136,12 @@ import sys
 sys.stdout.write('ok\n')
 __end__
 
+echo '*** Recording package list'
+pip list --format=columns | tee "$python_install_dir"/package-list.txt
+
+echo '*** Recording dmagellan Git hash'
+git --git-dir "$dmagellan_dir"/.git rev-parse HEAD | tee "$python_install_dir"/dmagellan-git.txt
+
 echo '*** Making package relocatable'
 # This generates a ton of output in trace mode so turn it off
 set +x
@@ -156,12 +162,6 @@ find "$dir" -type f -print | while read filename; do
 done
 __end__
 chmod +x "$python_install_dir"/fixpaths.sh
-
-echo '*** Recording package list'
-pip list --format=columns | tee "$python_install_dir"/package-list.txt
-
-echo '*** Recording dmagellan Git hash'
-git --git-dir "$dmagellan_dir"/.git rev-parse HEAD | tee "$python_install_dir"/dmagellan-git.txt
 
 echo '*** Tarring up results'
 cd "$work_dir"
