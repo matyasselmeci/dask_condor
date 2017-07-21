@@ -185,6 +185,10 @@ class HTCondorCluster(object):
     logger : `logging.Logger` or None, optional
         A standard Python `Logger` object to write logs to.  If not
         specified, the logger for this module is used.
+    diagnostics_port : int, optional
+        The port to start the Bokeh server on for monitoring the
+        scheduler.  Unlike LocalCluster, this is disabled by default.
+        The typical port is 8787.
 
     Other parameters are passed into `distributed.LocalCluster` as-is.
 
@@ -203,6 +207,7 @@ class HTCondorCluster(object):
                  transfer_files=None,
                  logdir='.',
                  logger=None,
+                 diagnostics_port=None,
                  **kwargs):
 
         self.logger = logger or logging.getLogger(__name__)
@@ -255,7 +260,8 @@ class HTCondorCluster(object):
                 self.logger.warning("Couldn't make log dir: %s", err)
 
         self.local_cluster = distributed.LocalCluster(
-            ip='', n_workers=0, scheduler_port=scheduler_port, **kwargs)
+            ip='', n_workers=0, scheduler_port=scheduler_port,
+            diagnostics_port=diagnostics_port, **kwargs)
 
         # dask-scheduler cannot distinguish task failure from
         # job removal/preemption. This might be a little extreme...
