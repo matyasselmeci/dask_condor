@@ -114,6 +114,8 @@ if [[ -n $extra_requirements_file ]]; then
     pip install -r "$extra_requirements_file"
 fi
 
+echo '*** Recording package list'
+pip list --format=columns | tee "$python_install_dir"/package-list.txt
 
 echo '*** Making package relocatable'
 # This generates a ton of output in trace mode so turn it off
@@ -135,9 +137,6 @@ find "$dir" -type f -print | while read filename; do
 done
 __end__
 chmod +x "$python_install_dir"/fixpaths.sh
-
-echo '*** Recording package list'
-pip list --format=columns | tee "$python_install_dir"/package-list.txt
 
 echo '*** Tarring up results'
 cd "$work_dir"
