@@ -293,7 +293,7 @@ class HTCondorCluster(object):
 
     @property
     def jobids(self):
-        return self.jobs.keys()
+        return list(self.jobs.keys())
 
     @property
     def scheduler_constraint(self):
@@ -509,7 +509,7 @@ class HTCondorCluster(object):
         """
         n_idle_jobs = len(self.idle_jobs)
         n_running_jobs = len(self.running_jobs)
-        timed_out_jobids = self.timed_out_jobs.keys()
+        timed_out_jobids = list(self.timed_out_jobs.keys())
         n_timed_out_jobs = len(timed_out_jobids)
 
         n_needed = n - n_idle_jobs - n_running_jobs
@@ -580,7 +580,7 @@ class HTCondorCluster(object):
             , ('nfutures', len(sch.who_has))
             , ('nidle', len(sch.idle))
             , ('nprocessing', len(list(itertools.chain.from_iterable(
-                sch.processing.values()))))
+                list(sch.processing.values())))))
             , ('tot_occupancy', sum(sch.occupancy.values()))
             ])
 
