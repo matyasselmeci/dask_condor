@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Install a miniconda Python distribution, add dmagellan,
+# Install a miniconda Python distribution
 # and package it up in a tarball.
 
-set -eux
+set -eu
 
 
 realpath () {
@@ -11,8 +11,8 @@ realpath () {
 }
 
 
-if [[ -n $_CONDOR_SCRATCH_DIR ]]; then
-	HOME="$_CONDOR_SCRATCH_DIR"
+if [[ -n ${_CONDOR_SCRATCH_DIR:-} ]]; then
+	HOME=$_CONDOR_SCRATCH_DIR
 	TMPDIR=${TMPDIR:-$_CONDOR_SCRATCH_DIR/tmp}
 	mkdir -p "$TMPDIR"
 	export HOME TMPDIR
@@ -22,7 +22,7 @@ work_dir=$(mktemp -dt dask_condor_worker.XXXXXX)
 # if not running under condor, clean up the work dir ourselves; otherwise,
 # condor will do that for us on job removal, and for interactive jobs, we'd
 # like to keep it for debugging
-[[ -n $_CONDOR_SCRATCH_DIR ]] || trap 'rm -rf "$work_dir"' EXIT
+[[ -n ${_CONDOR_SCRATCH_DIR:-} ]] || trap 'rm -rf "$work_dir"' EXIT
 
 if [[ $# -lt 2 ]]; then
     echo "Usage: $(basename $0) <source_url> <target_archive> [<extra_requirements_file>]"
@@ -51,7 +51,7 @@ dmagellan_dir=$work_dir/dmagellan
 hostname -f || :
 env | sort || :
 
-
+set -x
 cd "$work_dir"
 wget -O "$miniconda_install_script" "$miniconda_url"
 bash "$miniconda_install_script" -b -p "$python_install_dir"
@@ -83,31 +83,8 @@ if [[ -n $extra_requirements_file ]]; then
     conda install --file "$extra_requirements_file"
 fi
 
-echo '*** Cloning and installing dmagellan'
-git clone -b chtc https://github.com/kvpradap/dmagellan "$dmagellan_dir"
-cd "$dmagellan_dir"
-python setup.py build_ext --inplace
-python setup.py install
-
-echo '*** Testing dmagellan'
-python - <<__end__
-from dmagellan.blocker.attrequivalence.attr_equiv_blocker import AttrEquivalenceBlocker
-from dmagellan.blocker.overlap.overlapblocker import OverlapBlocker
-from dmagellan.blocker.blackbox.blackbox_blocker import BlackBoxBlocker
-from dmagellan.blocker.rulebased.rule_based_blocker import RuleBasedBlocker
-from dmagellan.feature.autofeaturegen import get_features_for_blocking
-from dmagellan.feature.extractfeatures import extract_feature_vecs
-from dmagellan.feature.autofeaturegen import get_features_for_matching
-from dmagellan.matcher.dtmatcher import DTMatcher
-from dmagellan.utils.py_utils.utils import concat_df
-print('ok')
-__end__
-
 echo '*** Recording package list'
 conda list | tee "$python_install_dir"/package-list.txt
-
-echo '*** Recording dmagellan Git hash'
-git --git-dir "$dmagellan_dir"/.git rev-parse HEAD | tee "$python_install_dir"/dmagellan-git.txt
 
 echo '*** Making package relocatable'
 # This generates a ton of output in trace mode so turn it off
