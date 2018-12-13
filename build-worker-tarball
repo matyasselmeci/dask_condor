@@ -3,7 +3,7 @@
 # Build Python, install the dependencies for dask, and package it up in a
 # tarball.
 
-set -eux
+set -eu
 
 
 realpath () {
@@ -11,7 +11,7 @@ realpath () {
 }
 
 
-if [[ -n $_CONDOR_SCRATCH_DIR ]]; then
+if [[ -n ${_CONDOR_SCRATCH_DIR:-} ]]; then
     HOME=$_CONDOR_SCRATCH_DIR
     TMPDIR=${TMPDIR:-$_CONDOR_SCRATCH_DIR/tmp}
     mkdir -p "$TMPDIR"
@@ -22,7 +22,7 @@ work_dir=$(mktemp -dt dask_condor_worker.XXXXXX)
 # if not running under condor, clean up the work dir ourselves; otherwise,
 # condor will do that for us on job removal, and for interactive jobs, we'd
 # like to keep it for debugging
-[[ -n $_CONDOR_SCRATCH_DIR ]] || trap 'rm -rf "$work_dir"' EXIT
+[[ -n ${_CONDOR_SCRATCH_DIR:-} ]] || trap 'rm -rf "$work_dir"' EXIT
 
 if [[ $# -lt 2 ]]; then
     echo "Usage: $(basename $0) <source_archive> <target_archive> [<extra_requirements_file>]"
@@ -52,7 +52,7 @@ python_bin_dir=$python_install_dir/bin
 hostname -f || :
 env | sort || :
 
-
+set -x
 # If the SSL headers aren't installed, Python will silently fail to build the
 # `_ssl` module, causing pip to fail because it can't use HTTPS.
 echo '*** Checking requirements'
