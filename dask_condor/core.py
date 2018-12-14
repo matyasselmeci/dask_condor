@@ -274,8 +274,7 @@ class HTCondorCluster(object):
         self.ignored_jobs = set()  # set of jobids
         self._update_callback = tornado.ioloop.PeriodicCallback(
             callback=self._update_jobs,
-            callback_time=update_interval,
-            io_loop=self.scheduler.loop)
+            callback_time=update_interval)
         self._update_callback.start()
 
 
