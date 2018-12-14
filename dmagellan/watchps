@@ -1,2 +1,0 @@
-#!/bin/sh
-exec watch -n ${1:-60} '(echo ---------------------; date; ps xu | grep \[p\]ython) | tee -a dmagellan-ps.log'

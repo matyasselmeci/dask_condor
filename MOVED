@@ -1,0 +1,8 @@
+The following files and directories were moved to
+matyasselmeci/dask_condor_experiments because they were not generally useful:
+---
+chtc/
+dmagellan/
+experiments/weather
+piltest/
+provision_vm

@@ -1,4 +1,0 @@
-cython
-scipy
-chest
-lz4

@@ -1,2 +1,0 @@
-# a fork of PIL, the Python Imaging Library
-Pillow
