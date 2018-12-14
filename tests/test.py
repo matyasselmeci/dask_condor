@@ -2,15 +2,18 @@
 from __future__ import print_function
 
 import logging
+import os
 import sys
 import unittest
 
 import dask.array
 import distributed
 
-sys.path.insert(0, '.')
 
-from dask_condor.tests import HTCondorClusterTestCase
+if __name__ == "__main__" and __package__ is None:
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from tests import HTCondorClusterTestCase
 from dask_condor import HTCondorCluster
 
 
