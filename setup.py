@@ -4,7 +4,7 @@ from setuptools import setup
 
 setup(
     name='dask_condor',
-    version='0.0.20170518',
+    version='0.0.20181214',
     description='HTCondor backend for Dask.Distributed',
     author='Matyas Selmeci',
     author_email='matyas@cs.wisc.edu',
@@ -12,6 +12,8 @@ setup(
     packages=['dask_condor'],
     install_requires=['dask',
                       'distributed',
-                      'bokeh'],
+                      'htcondor>=8.6',
+                      'tornado>=5.0',
+                      ],
     license="Apache Software License",
 )
