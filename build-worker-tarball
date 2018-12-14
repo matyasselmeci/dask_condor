@@ -7,7 +7,7 @@ set -eu
 
 
 realpath () {
-    python -c "import os, sys; sys.stdout.write(os.path.realpath(r'''$1''') + '\n')"
+    python -c "import os, sys; print(os.path.realpath(sys.argv[1]))" "$1"
 }
 
 
@@ -91,12 +91,11 @@ export PATH
 
 echo '*** Testing that Python got properly installed'
 python - <<__end__
-import sys
 from distutils import sysconfig
-sys.stdout.write(sysconfig.PREFIX + '\n')
+print(sysconfig.PREFIX)
 
 import ssl
-sys.stdout.write('ok\n')
+print('ok')
 __end__
 
 echo '*** Downloading and installing dask.distributed'
@@ -104,8 +103,8 @@ pip install dask distributed numpy pandas
 
 echo '*** Testing that dask.distributed got properly installed'
 python - <<__end__
-import dask, dask.array, dask.bag, dask.dataframe, distributed, sys
-sys.stdout.write('ok\n')
+import dask, dask.array, dask.bag, dask.dataframe, distributed
+print('ok')
 __end__
 which dask-worker
 
@@ -128,7 +127,7 @@ set -x
 cat - > "$python_install_dir"/fixpaths.sh <<'__end__'
 #!/bin/bash
 dir=$(dirname "$0")
-dir_abs=$(python -c "import os, sys; sys.stdout.write(os.path.realpath(r'''$dir''') + '\n')")
+dir_abs=$(python -c "import os, sys; print(os.path.realpath(sys.argv[1])))" "$dir")
 find "$dir" -type f -print | while read filename; do
     grep -qFI "XXXINSTALLDIRXXX" "$filename" || continue
     sed -i -e "s|XXXINSTALLDIRXXX|$dir_abs|g" "$filename"

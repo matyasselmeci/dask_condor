@@ -7,7 +7,7 @@ set -eu
 
 
 realpath () {
-    python -c "import os; print(os.path.realpath(r'''$1'''))"
+    python -c "import os, sys; print(os.path.realpath(sys.argv[1]))" "$1"
 }
 
 
@@ -44,7 +44,6 @@ else
 fi
 miniconda_install_script=$(basename "$1")
 python_install_dir=$work_dir/dask_condor_worker
-dmagellan_dir=$work_dir/dmagellan
 
 
 # DEBUGGING
@@ -99,7 +98,7 @@ set -x
 cat - > "$python_install_dir"/fixpaths.sh <<'__end__'
 #!/bin/bash
 dir=$(dirname "$0")
-dir_abs=$(python -c "import os; print(os.path.realpath(r'''$dir'''))")
+dir_abs=$(python -c "import os, sys; print(os.path.realpath(sys.argv[1])))" "$dir")
 find "$dir" -type f -print | while read filename; do
     grep -qFI "XXXINSTALLDIRXXX" "$filename" || continue
     sed -i -e "s|XXXINSTALLDIRXXX|$dir_abs|g" "$filename"
