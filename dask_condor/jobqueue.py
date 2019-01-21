@@ -8,67 +8,42 @@ import collections
 import errno
 import itertools
 import logging
+import math
 import os
+import re
 import tempfile
-import time
 
-import distributed
-import tornado
-
+import dask
+import dask_jobqueue
+import tornado.ioloop
+from distributed.utils import parse_bytes
 import htcondor
 import classad
 
-if not hasattr(htcondor, 'Submit'):
-    raise ImportError("htcondor.Submit not found;"
-                      " HTCondor 8.6.0 or newer required")
 
 from . import util
 
 
 JOB_TEMPLATE = \
-    { 'Executable':           '/usr/bin/dask-worker'
-    , 'Universe':             'vanilla'
+    { 'Universe':             'vanilla'
     # $F(MY.JobId) strips the quotes from MY.JobId
-    , 'Output':               '$(LogDir)/worker-$F(MY.JobId).out'
-    ## Don't transfer stderr -- we're redirecting it to stdout
-    #, 'Error':                '$(LogDir)/worker-$F(MY.JobId).err'
-    , 'Log':                  '$(LogDir)/worker-$(ClusterId).log'
+    , 'Output':               '$(LogDirectory)/worker-$F(MY.JobId).out'
+    , 'Log':                  '$(LogDirectory)/worker-$(ClusterId).log'
     # We kill all the workers to stop them so we need to stream their
     # stdout if we ever want to see anything
     , 'Stream_Output':        'True'
-    #, 'Stream_Error':         'True'
 
-    # using MY.Arguments instead of Arguments lets the value be a classad
-    # expression instead of a string. Thanks TJ!
-    , 'MY.Arguments':
-        'strcat( MY.DaskSchedulerAddress'
-        # can't name a worker if we have more than one proc, in which case
-        # we don't need a nanny
-        '      , " --nprocs=1"'
-        '      , " --no-nanny"'
-        '      , " --nthreads=", MY.DaskNThreads'
-        '      , " --no-bokeh"'
-        # default memory limit is 75% of memory;
-        # use 75% of RequestMemory instead
-        '      , " --memory-limit="'
-        '      , floor(RequestMemory * 1048576 * 0.75)'
-        '      , " --name=", MY.DaskWorkerName'
-        '      )'
+    , 'MY.DaskWorkerName':    '"htcondor--$F(MY.JobId)--"'
+    , 'RequestCpus':          'MY.DaskWorkerCores'
+    , 'RequestMemory':        'floor(MY.DaskWorkerMemory / 1048576)'
+    , 'RequestDisk':          'floor(MY.DaskWorkerDisk / 1024)'
+    # Need to transfer wrapper script at least
+    , 'ShouldTransferFiles':  'YES'
 
-    , 'MY.DaskWorkerName':    '"htcondor-$F(MY.JobId)"'
-
-    , 'RequestCpus':          'MY.DaskNThreads'
-
-    , 'Periodic_Hold':
-        '((time() - EnteredCurrentStatus) > MY.DaskWorkerTimeout) &&'
-        ' (JobStatus == 2)'
-    , 'Periodic_Hold_Reason': 'strcat("dask-worker exceeded max lifetime of ",'
-                              '       interval(MY.DaskWorkerTimeout))'
-    , 'Transfer_Input_Files': ''
     , 'MY.JobId':             '"$(ClusterId).$(ProcId)"'
     }
 
-SCRIPT_TEMPLATE = """\
+WRAPPER_SCRIPT = """\
 #!/bin/bash
 
 exec -- 2>&1
@@ -79,60 +54,44 @@ if [[ -z $_CONDOR_SCRATCH_DIR ]]; then
     exit 1
 fi
 
-export HOME=$_CONDOR_SCRATCH_DIR
+cd "$_CONDOR_SCRATCH_DIR"
 
-if [[ -n "%(worker_tarball)s" ]]; then
-    tar xzf ~/"%(worker_tarball)s"
-    ~/dask_condor_worker/fixpaths.sh
-    export PATH=~/dask_condor_worker/bin:$PATH
-    export PYTHONPATH=~:${PYTHONPATH+":$PYTHONPATH"}
+worker_tarball=$1
+pre_script=$2
+shift 2
+
+
+if [[ $worker_tarball ]]; then
+    tar xzf "$worker_tarball"
+    fixpaths=$_CONDOR_SCRATCH_DIR/dask_condor_worker/fixpaths.sh
+    if [[ -f $fixpaths ]]; then
+        chmod +x "$fixpaths"
+        "$fixpaths"
+    fi
+    export PATH=$_CONDOR_SCRATCH_DIR/dask_condor_worker/bin:$PATH
+    export PYTHONPATH=$_CONDOR_SCRATCH_DIR${PYTHONPATH+":$PYTHONPATH"}
 fi
 
-args=( "$@" )
-
-# This isn't actually necessary - $TMP is already under $_CONDOR_SCRATCH_DIR
-# so that's where mktemp will make its files.
-local_directory=$_CONDOR_SCRATCH_DIR/.worker
-mkdir -p "$local_directory"
-args+=(--local-directory "$local_directory")
-if [[ -n "%(pre_script)s" ]]; then
-    chmod +x "%(pre_script)s"
-    "%(pre_script)s"
+if [[ $pre_script ]]; then
+    chmod +x "$pre_script"
+    "$pre_script"
 fi
-exec dask-worker "${args[@]}"
+
+exec "$@"
 """
-
-
-_global_schedulers = []  # (scheduler_id, schedd)
-
-
-@atexit.register
-def global_killall():
-    """Kill all worker jobs connected to known schedulers.
-
-    """
-    for sid, schedd in _global_schedulers:
-        util.condor_rm(schedd, 'DaskSchedulerId == "%s"' % sid)
 
 
 class Error(Exception):
     pass
 
 
-class HTCondorCluster(object):
+class HTCondorJQCluster(dask_jobqueue.JobQueueCluster):
     """
     Cluster manager for workers run as HTCondor jobs.
 
-    Runs a `distributed.scheduler.Scheduler` listening on the local
-    machine, and contains methods for launching and managing
-    ``dask-worker`` processes that are submitted as HTCondor jobs and run
-    remotely.  Starts up a `Scheduler` immediately (via
-    `distributed.LocalCluster`) but does not submit any worker jobs until
-    told to do so (usually by `start_workers`).
-
     It is not necessary to use a shared filesystem or pre-distribute
     Python, Dask, Python libraries, or data to the execute nodes before
-    sending Dask.distributed jobs to them: `HTCondorCluster` can send a
+    sending Dask.distributed jobs to them: `HTCondorJQCluster` can send a
     "worker tarball" that contains the Python environment, and extra
     files (e.g. data) as desired.
 
@@ -149,10 +108,7 @@ class HTCondorCluster(object):
 
     Parameters
     ----------
-    memory_per_worker, disk_per_worker, threads_per_worker,
-    worker_timeout, transfer_files : optional
-        Default parameters for worker jobs.  See `start_workers` for
-        a description.
+    disk : int, kilobytes
     pool : str, optional
         An IP address:port pair of the HTCondor collector to query to
         find out how to contact the HTCondor schedd.  Only used if
@@ -175,13 +131,6 @@ class HTCondorCluster(object):
         executing ``dask-worker``.  Use this if you need to prepare data
         (e.g. extract transferred files).  If not specified or None, no
         extra script is run.
-    logdir : str, optional
-        The path to a directory to place HTCondor job output and logs
-        into.  One log file (containing stdout and stderr) is generated
-        per HTCondor job, plus another log file (containing job status)
-        per HTCondor cluster, so it might be worth placing them into a
-        separate directory.  The directory will be created if it does not
-        exist.  If not specified, the current directory is used.
     logger : `logging.Logger` or None, optional
         A standard Python `Logger` object to write logs to.  If not
         specified, the logger for this module is used.
@@ -190,85 +139,92 @@ class HTCondorCluster(object):
         scheduler.  Unlike LocalCluster, this is disabled by default.
         The typical port is 8787.
 
-    Other parameters are passed into `distributed.LocalCluster` as-is.
+    Other parameters are passed into `dask_jobqueue.JobQueueCluster` as-is.
 
     """
+
+    job_id_regexp=r'(?P<job_id>\d+\.\d+)'
+
     def __init__(self,
-                 memory_per_worker=1024,
-                 disk_per_worker=1048576,
+                 disk=None,
                  pool=None,
                  schedd_name=None,
-                 threads_per_worker=1,
                  update_interval=10000,
-                 worker_timeout=(24 * 60 * 60),
-                 scheduler_port=8786,
                  worker_tarball=None,
                  pre_script=None,
                  transfer_files=None,
-                 logdir='.',
+                 config_name='htcondor',
+                 env_extra=None,
                  logger=None,
-                 diagnostics_port=None,
                  **kwargs):
 
+        # TODO Handle death_timeout and extra (plain extra args)
+
+        if disk is None:
+            disk = dask.config.get('jobqueue.%s.disk' % config_name, None)
+        if disk is None:
+            raise ValueError("You must specify how much disk to use per job like ``disk='1 GB'``")
+        self.worker_disk = parse_bytes(disk)
+
+        super(HTCondorJQCluster, self).__init__(config_name=config_name, **kwargs)
+
+        if env_extra is None:
+            env_extra = dask.config.get('jobqueue.%s.env-extra' % config_name, default=[])
+        if env_extra is None:
+            self.env = []
+        else:
+            # env_extra is an array of export statements
+            self.env = [re.sub("^export\\s+", "", e) for e in env_extra if e]
+
+        if not self.worker_processes:
+            self.worker_processes = 1
         self.logger = logger or logging.getLogger(__name__)
-        self.memory_per_worker = memory_per_worker
-        self.disk_per_worker = disk_per_worker
-        self.threads_per_worker = threads_per_worker
         if int(update_interval) < 1:
             raise ValueError("update_interval must be >= 1")
-        self.worker_timeout = worker_timeout
         self.worker_tarball = worker_tarball
         self.pre_script = pre_script
         self.transfer_files = transfer_files
 
         if schedd_name is None:
+            schedd_name = dask.config.get('jobqueue.%s.schedd-name' % config_name, None)
+        if schedd_name is None:
             self.schedd = htcondor.Schedd()
         else:
+            if pool is None:
+                pool = dask.config.get('jobqueue.%s.pool' % config_name)
             collector = htcondor.Collector(pool)
             self.schedd = htcondor.Schedd(
                 collector.locate(
                     htcondor.DaemonTypes.Schedd,
                     schedd_name))
 
+        self.log_directory = kwargs.get('log_directory')
+        if self.log_directory is None:
+            self.log_directory = dask.config.get('jobqueue.%s.log-directory' % config_name)
+        if self.log_directory is None:
+            self.log_directory = "."
+
         self.script = tempfile.NamedTemporaryFile(
             suffix='.sh', prefix='dask-worker-wrapper-')
         os.chmod(self.script.name, 0o755)
-        worker_tarball_in_wrapper = ""
-        pre_script_in_wrapper = ""
+        self.worker_tarball_in_wrapper = ""
+        self.pre_script_in_wrapper = ""
         if self.worker_tarball:
             if '://' not in self.worker_tarball:
                 self._verify_tarball()
-            worker_tarball_in_wrapper = os.path.basename(self.worker_tarball)
+            self.worker_tarball_in_wrapper = os.path.basename(self.worker_tarball)
         if self.pre_script:
-            pre_script_in_wrapper = "./" + os.path.basename(self.pre_script)
-        self.script.write(SCRIPT_TEMPLATE
-            % {'worker_tarball': worker_tarball_in_wrapper,
-               'pre_script': pre_script_in_wrapper})
+            self.pre_script_in_wrapper = "./" + os.path.basename(self.pre_script)
+        self.script.write(WRAPPER_SCRIPT)
         self.script.flush()
 
         @atexit.register
         def _erase_script():
             self.script.close()
 
-        self.logdir = logdir
-        try:
-            os.makedirs(self.logdir)
-        except OSError as err:
-            if err.errno == errno.EEXIST:
-                pass
-            else:
-                self.logger.warning("Couldn't make log dir: %s", err)
-
-        self.local_cluster = distributed.LocalCluster(
-            ip='', n_workers=0, scheduler_port=scheduler_port,
-            diagnostics_port=diagnostics_port, **kwargs)
-
         # dask-scheduler cannot distinguish task failure from
         # job removal/preemption. This might be a little extreme...
         self.scheduler.allowed_failures = 99999
-
-        global _global_schedulers
-        _global_schedulers.append((self.scheduler.id, self.schedd))
 
         self.jobs = {}  # {jobid: CLASSAD}
         self.ignored_jobs = set()  # set of jobids
@@ -277,18 +233,11 @@ class HTCondorCluster(object):
             callback_time=update_interval)
         self._update_callback.start()
 
+    def job_script(self):
+        raise NotImplementedError("Conversion to submit file not implemented yet")
 
-    @tornado.gen.coroutine
-    def _start(self):
-        pass
-
-    @property
-    def scheduler(self):
-        return self.local_cluster.scheduler
-
-    @property
-    def scheduler_address(self):
-        return self.scheduler.address
+    def job_file(self):
+        raise NotImplementedError("Conversion to submit file not implemented yet")
 
     @property
     def jobids(self):
@@ -320,69 +269,32 @@ class HTCondorCluster(object):
 
     def start_workers(self,
                       n=1,
-                      memory_per_worker=None,
-                      disk_per_worker=None,
-                      threads_per_worker=None,
-                      worker_timeout=None,
                       transfer_files=None,
                       extra_attribs=None):
-        """Start `n` worker jobs in a single HTCondor job cluster.
+        """ Start workers and point them to our local scheduler """
+        self.logger.debug('starting %s workers', n)
+        num_jobs = int(math.ceil(n / self.worker_processes))
+        job = htcondor.Submit(JOB_TEMPLATE)
+        job['MY.DaskSchedulerAddress'] = '"%s"' % self.scheduler.address
+        job['MY.DaskWorkerDisk'] = str(self.worker_disk)
+        job['MY.DaskWorkerProcesses'] = str(self.worker_processes)
+        job['MY.DaskWorkerProcessThreads'] = str(self.worker_process_threads)
+        job['MY.DaskWorkerProcessMemory'] = str(self.worker_process_memory)
+        job['MY.DaskWorkerCores'] = str(self.worker_cores)
+        job['MY.DaskSchedulerId'] = '"%s"' % self.scheduler.id
+        job['MY.DaskWorkerTimeout'] = str(self.worker_timeout)  # TODO
 
-        The default values for the parameters are instance variables but
-        may be overridden here.
+        job['LogDirectory'] = self.log_directory
+        job['Executable'] = self.script.name
+        job['Arguments'] = util.quote_arguments(
+            self.worker_tarball_in_wrapper, self.pre_script_in_wrapper,
+            self._command_template
+        )
+        job['Environment'] = util.quote_environment(["JOB_ID=$F(MY.JobId)"] + self.env)
 
-        Parameters
-        ----------
-        n : int, optional
-            Number of worker jobs to start (default 1).
-        memory_per_worker : int, optional
-            Memory (in MB) to request for each worker job.
-        disk_per_worker : int, optional
-            Disk space (in KB) to request for each worker job.
-        threads_per_worker : int, optional
-            Number of threads to use in each worker.  Raising this
-            increases the number of cores requested for the job.
-        worker_timeout : int, optional
-            Maximum running time of a worker job, in seconds.  After this,
-            the job is held.
-        transfer_files : str or list of str, optional
-            Additional files (not including the worker tarball) to
-            transfer as part of a worker job.  If a str, should be
-            comma-separated.
-        extra_attribs: dict of str, optional
-            Additional submit file attributes to include in a worker
-            job.  Will be added to the htcondor.Submit object as-is.
-
-        """
-        n = int(n)
-        if n < 1:
-            raise ValueError("n must be >= 1")
-        memory_per_worker = int(memory_per_worker or self.memory_per_worker)
-        if memory_per_worker < 1:
-            raise ValueError("memory_per_worker must be >= 1 (MB)")
-        disk_per_worker = int(disk_per_worker or self.disk_per_worker)
-        if disk_per_worker < 1:
-            raise ValueError("disk_per_worker must be >= 1 (KB)")
-        threads_per_worker = int(threads_per_worker or self.threads_per_worker)
-        if threads_per_worker < 1:
-            raise ValueError("threads_per_worker must be >= 1")
-        worker_timeout = int(worker_timeout or self.worker_timeout)
-        if worker_timeout < 1:
-            raise ValueError("worker_timeout must be >= 1 (sec)")
         transfer_files = transfer_files or self.transfer_files or []
         if isinstance(transfer_files, str):
             transfer_files = [x.strip() for x in transfer_files.split(',')]
-
-        job = htcondor.Submit(JOB_TEMPLATE)
-        job['MY.DaskSchedulerAddress'] = '"' + self.scheduler_address + '"'
-        job['MY.DaskNProcs'] = "1"
-        job['MY.DaskNThreads'] = str(threads_per_worker)
-        job['RequestMemory'] = str(memory_per_worker)
-        job['RequestDisk'] = str(disk_per_worker)
-        job['MY.DaskSchedulerId'] = '"' + self.scheduler.id + '"'
-        job['MY.DaskWorkerTimeout'] = str(worker_timeout)
-        job['LogDir'] = self.logdir
-        job['Executable'] = self.script.name
         if self.worker_tarball:
             transfer_files.append(self.worker_tarball)
         if self.pre_script:
@@ -390,14 +302,15 @@ class HTCondorCluster(object):
         job['Transfer_Input_Files'] = ', '.join(transfer_files)
 
         if extra_attribs:
-            job.update(extra_attribs)
+            job.update({k: str(v) for k, v in extra_attribs.items()})
 
         classads = []
         with self.schedd.transaction() as txn:
-            clusterid = job.queue(txn, count=n, ad_results=classads)
-        self.logger.info("%d job(s) submitted to cluster %s." % (n, clusterid))
+            clusterid = job.queue(txn, count=num_jobs, ad_results=classads)
+        self.logger.info("%d job(s) submitted to cluster %s." % (num_jobs, clusterid))
         for ad in classads:
             self.jobs[ad['JobId']] = ad
+            self.pending_jobs[ad['JobId']] = {}
 
     def killall(self):
         """Remove all workers.
@@ -481,15 +394,14 @@ class HTCondorCluster(object):
         tar = tarfile.open(self.worker_tarball)
         try:
             members = tar.getnames()
-            for path in ['dask_condor_worker/fixpaths.sh',
-                         'dask_condor_worker/bin/python',
-                         'dask_condor_worker/bin/dask-worker']:
+            for path in ['dask_condor_worker/bin/python']:
                 if path not in members:
                     raise Error("Expected file %s not in tarball" % (path))
         finally:
             tar.close()
 
-    def scale_up(self, n):
+    def scale_up(self, n, **kwargs):
+        # TODO
         """Ensure we have at least `n` workers available to run in the queue.
 
         The worker jobs may be in 'idle' or 'running' state.  If any
@@ -589,15 +501,6 @@ class HTCondorCluster(object):
         """
         for k,v in self.stats().items():
             print("%-20s: %5s" % (k,v))
-
-    def __del__(self):
-        self.close()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        self.close()
 
     def __str__(self):
         total = running = idle = held = 0

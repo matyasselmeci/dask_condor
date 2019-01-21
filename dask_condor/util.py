@@ -1,4 +1,5 @@
 import htcondor
+import re
 
 
 JOB_STATUS_IDLE = 1
